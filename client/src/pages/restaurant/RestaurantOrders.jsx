@@ -15,7 +15,6 @@ const RestaurantOrders = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 flex font-sans">
-            <RestaurantSidebar />
 
             <main className="flex-1 p-8">
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">Orders Manager</h2>

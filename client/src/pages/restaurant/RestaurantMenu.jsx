@@ -3,7 +3,6 @@ import RestaurantSidebar from "../../components/RestaurantSidebar";
 const RestaurantMenu = () => {
     return (
         <div className="min-h-screen bg-gray-50 flex font-sans">
-            <RestaurantSidebar />
 
             <main className="flex-1 p-8">
                 <div className="flex justify-between items-center mb-6">
