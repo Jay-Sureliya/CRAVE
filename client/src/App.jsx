@@ -10,6 +10,7 @@ import Restaurant from "./pages/Restaurant.jsx";
 import SpecialOffer from "./pages/SpecialOffer.jsx";
 import TrackOrder from "./pages/TrackOrder.jsx";
 import MainLayout from "./components/MainLayout.jsx";
+import Profile from "./pages/Profile.jsx";
 
 // --- PLACEHOLDERS ---
 const OrderFood = () => <div className="p-20 text-center text-2xl">🍔 Customer Menu (Order Now Page)</div>;
@@ -65,6 +66,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute role="customer">
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+
         {/* <Route
             path="/restaurant/orders"
             element={

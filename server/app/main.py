@@ -279,7 +279,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # React Vite
+    allow_origins=["*"],  # React Vite
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -299,14 +299,21 @@ def verify_password(plain: str, hashed: str):
 # ---------------- AUTH ----------------
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
+    # Check username
     if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # Check email
+    if db.query(User).filter(User.email == user.email).first():
+        raise HTTPException(status_code=400, detail="Email already exists")
 
     new_user = User(
         username=user.username,
         full_name=user.full_name,
+        email=user.email,
+        phone=user.phone,
         hashed_password=hash_password(user.password),
-        role=user.role or "customer"
+        role=user.role
     )
 
     db.add(new_user)
@@ -314,6 +321,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
 
     return {"message": "Customer registered successfully"}
+
 
 @app.post("/login")
 def login(

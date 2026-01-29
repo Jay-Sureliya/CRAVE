@@ -31,7 +31,7 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
         <div className="w-full pb-2 bg-white    ">
 
             {/* --- MAIN HEADER BANNER (Floating Card Style) --- */}
-            <div className="w-[97%] mx-auto flex items-center justify-between bg-gray-100 rounded-bl-xl rounded-br-xl border border-slate-200 overflow-hidden h-14">
+            <div className="w-[95%] mx-auto flex items-center justify-between bg-gray-100 rounded-bl-xl rounded-br-xl border border-slate-200 overflow-hidden h-14">
 
                 {/* LEFT: Promo Section */}
                 <div className="hidden md:flex items-center px-6 h-full">

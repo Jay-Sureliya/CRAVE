@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean , Float, ForeignKey
+from sqlalchemy import Column, Integer, String , Boolean
 from app.db.session import Base
 
 class User(Base):
@@ -7,8 +7,10 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     full_name = Column(String)
+    email = Column(String, unique=True, index=True)
+    phone = Column(String)
     hashed_password = Column(String)
-    role = Column(String, default="customer")  # admin / restaurant / customer
+    role = Column(String, default="customer")
 
 
 class Restaurant(Base):

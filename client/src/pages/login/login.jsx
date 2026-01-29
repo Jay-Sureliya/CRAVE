@@ -11,7 +11,7 @@ const AuthPage = () => {
         password: "",
         email: "",
         phone: "",
-        role: "user" 
+        role: "user"
     });
     const [error, setError] = useState("");
     const navigate = useNavigate();
@@ -44,17 +44,23 @@ const AuthPage = () => {
                 else navigate("/");
 
             } else {
-                // --- SIGNUP LOGIC ---
-                await api.post("/register", {
-                    username: formData.username,
-                    email: formData.email,
-                    password: formData.password,
-                    phone: formData.phone,
-                    role: "user" 
-                });
+                try {
+                    await api.post("/register", {
+                        username: formData.username.trim(),
+                        full_name: formData.username.trim(), // or separate input
+                        email: formData.email.trim(),
+                        phone: formData.phone.trim(),
+                        password: formData.password.trim(),
+                        role: "customer"
+                    });
+                    alert("Customer account created! Please log in.");
+                    setIsLogin(true);
+                } catch (err) {
+                    console.error(err);
+                    // Show backend error message
+                    setError(err.response?.data?.detail || "Signup failed. Try again.");
+                }
 
-                alert("Customer account created! Please log in.");
-                setIsLogin(true);
             }
 
         } catch (err) {
@@ -81,7 +87,7 @@ const AuthPage = () => {
             {/* 1. FIXED INSET-0: Locks the container to the viewport size (No Window Scrollbar).
                 2. BG-SLATE-50: Background color.
             */}
-            <div className="pt-35 fixed inset-0 bg-slate-50 overflow-hidden flex items-center justify-center">
+            <div className="pt-35 w-[95%] mx-auto fixed inset-0 overflow-hidden flex items-center justify-center">
 
                 {/* Background Pattern */}
                 <div className="absolute inset-0 w-full h-full opacity-5 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
@@ -92,7 +98,7 @@ const AuthPage = () => {
                     - 'h-full w-full': Fills the screen.
                 */}
                 <div className="relative h-full w-full overflow-y-auto no-scrollbar flex items-center justify-center p-4">
-                    
+
                     <motion.div
                         layout
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
