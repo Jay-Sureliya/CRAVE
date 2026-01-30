@@ -1,5 +1,13 @@
+# Virtual Environment
 venv/
-.env
 
+# Environment Variables
+.env
+.flaskenv
+
+# Python specific files
 __pycache__/
 *.pyc
+
+# IDE specific files (VS Code)
+.vscode/
