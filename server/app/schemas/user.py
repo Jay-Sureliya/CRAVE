@@ -22,13 +22,15 @@ class UserUpdate(BaseModel):
     profile_image: Optional[str] = None 
 
     model_config = ConfigDict(from_attributes=True)
-
+    
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str
     role: str
     username: str
     user_id: int
+    
+    # ✅ ADD THIS LINE:
+    restaurant_id: Optional[int] = None 
 
-    # Updated to Pydantic V2 syntax
     model_config = ConfigDict(from_attributes=True)

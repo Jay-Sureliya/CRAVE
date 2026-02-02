@@ -9,3 +9,11 @@ class RestaurantRequestCreate(BaseModel):
 
     class Config:
         from_attributes = True  # ✅ Pydantic v2 fix
+
+class RestaurantResponse(BaseModel):
+    id: int
+    name: str
+    is_active: bool
+    
+    class Config:
+        from_attributes = True

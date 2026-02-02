@@ -40,6 +40,8 @@ const AuthPage = () => {
                 // SAVING DATA - Essential for the Profile page to work after refresh
                 sessionStorage.setItem("token", res.data.access_token);
                 sessionStorage.setItem("role", res.data.role);
+                sessionStorage.setItem("restaurant_id", res.data.restaurant_id);
+
                 // Ensure user_id is saved as a string
                 sessionStorage.setItem("user_id", String(res.data.user_id));
 

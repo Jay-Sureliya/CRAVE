@@ -11,6 +11,8 @@ import SpecialOffer from "./pages/SpecialOffer.jsx";
 import TrackOrder from "./pages/TrackOrder.jsx";
 import MainLayout from "./components/MainLayout.jsx";
 import Profile from "./pages/Profile.jsx";
+import RestaurantsList from "./pages/RestaurantsList.jsx";
+import RestaurantDetails from "./pages/RestaurantDetails.jsx";
 
 // --- PLACEHOLDERS ---
 const OrderFood = () => <div className="p-20 text-center text-2xl">🍔 Customer Menu (Order Now Page)</div>;
@@ -41,7 +43,8 @@ function App() {
           <Route path="/special-offer" element={<SpecialOffer />} />
 
           {/* Public Restaurant Listing */}
-          <Route path="/rest" element={<Restaurant />} />
+          <Route path="/rest" element={<RestaurantsList />} />
+          <Route path="/rest/:id" element={<RestaurantDetails />} />
 
           <Route path="/track-order" element={<TrackOrder />} />
           <Route path="/order-food" element={<OrderFood />} />

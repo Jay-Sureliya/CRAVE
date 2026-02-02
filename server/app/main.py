@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,9 +11,14 @@ from dotenv import load_dotenv
 
 # --- INTERNAL IMPORTS ---
 from app.db.session import engine, Base, get_db
-from app.models.user import User
+from app.models.user import User, Restaurant
 from app.schemas.user import UserCreate, UserUpdate, TokenResponse
 from app.routes import restaurant
+from app.models.restaurant_request import RestaurantRequest  # Make sure this file exists/is imported correctly
+from app.schemas.restaurant_request import RestaurantRequestCreate , RestaurantResponse
+from app.routes import admin
+from app.routes import menu
+
 
 load_dotenv()
 
@@ -26,9 +32,12 @@ app = FastAPI(title="Crave API")
 
 # ---------------- MIDDLEWARE (CORS) ----------------
 # Updated to handle specific origin and credentials for better browser compatibility
+# ---------------- MIDDLEWARE (CORS) ----------------
+# app/main.py
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], 
+    allow_origins=["http://localhost:5173", "http://localhost:3000"], # ✅ Explicit list
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,6 +45,8 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 app.include_router(restaurant.router)
+app.include_router(menu.router)
+app.include_router(admin.router)
 
 # ---------------- HELPERS ----------------
 def verify_password(plain, hashed):
@@ -70,26 +81,36 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/login", response_model=TokenResponse)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # 1. Check User
     user = db.query(User).filter(User.username == form_data.username).first()
-
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    access_token_expires = timedelta(hours=2)
+    # 2. Get Restaurant ID
+    restaurant_id = None
+    if user.role == "restaurant":
+        restaurant_record = db.query(Restaurant).filter(Restaurant.email == user.email).first()
+        if restaurant_record:
+            restaurant_id = restaurant_record.id
+
+    # 3. Create Token
     payload = {
         "sub": user.username,
         "id": user.id,
         "role": user.role,
-        "exp": datetime.now(timezone.utc) + access_token_expires
+        "restaurant_id": restaurant_id,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=2)
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
+    # 4. Return Response (THIS IS THE FIX)
     return {
         "access_token": token,
         "token_type": "bearer",
         "role": user.role,
         "username": user.username,
-        "user_id": user.id
+        "user_id": user.id,
+        "restaurant_id": restaurant_id  # <--- YOU WERE MISSING THIS LINE!
     }
 
 # ---------------- USER PROFILE MANAGEMENT (ID-BASED) ----------------
@@ -153,6 +174,69 @@ def admin_dashboard(current_user=Depends(get_current_user)):
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Unauthorized")
     return {"stats": "Admin Data"}
+
+@app.post("/api/restaurant-request")
+def submit_restaurant_request(request: RestaurantRequestCreate, db: Session = Depends(get_db)):
+    """
+    Receives the restaurant application from the About Us page modal.
+    """
+    # 1. Check if a request with this email already exists to prevent spam
+    existing_request = db.query(RestaurantRequest).filter(RestaurantRequest.email == request.email).first()
+    if existing_request:
+        raise HTTPException(
+            status_code=400, 
+            detail="A request with this email already exists."
+        )
+
+    # 2. Create the new DB entry
+    new_request = RestaurantRequest(
+        restaurant_name=request.restaurantName,  # Mapping Pydantic (camelCase) to DB (snake_case)
+        owner_name=request.ownerName,
+        email=request.email,
+        phone=request.phone,
+        address=request.address,
+        status="pending"
+    )
+
+    # 3. Save to Database
+    db.add(new_request)
+    db.commit()
+    db.refresh(new_request)
+
+    return {"message": "Application received successfully", "id": new_request.id}
+
+# --- TEMPORARY RESET TOOL ---
+@app.get("/api/debug/reset-user/{username}")
+def reset_broken_user(username: str, db: Session = Depends(get_db)):
+    # 1. Find the User
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        return {"error": "User not found"}
+    
+    # 2. Reset the Restaurant Request so you can approve it again
+    # (Assuming you have a RestaurantRequest model imported)
+    try:
+        req = db.query(RestaurantRequest).filter(RestaurantRequest.email == user.email).first()
+        if req:
+            req.status = "pending"
+    except:
+        pass # Ignore if request table doesn't exist or error occurs
+    
+    # 3. Delete the Broken User
+    db.delete(user)
+    db.commit()
+    
+    return {"message": f"User '{username}' deleted. Please Go to Admin Panel and Approve the request again."}
+
+
+@app.get("/restaurants", response_model=List[RestaurantResponse])
+def get_all_restaurants(db: Session = Depends(get_db)):
+    """
+    Fetch all active restaurants for the customer homepage.
+    """
+    # Get all restaurants where is_active is True
+    restaurants = db.query(Restaurant).filter(Restaurant.is_active == True).all()
+    return restaurants
 
 if __name__ == "__main__":
     import uvicorn

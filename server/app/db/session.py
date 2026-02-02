@@ -6,14 +6,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Get the Database URL from .env
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# --- UPDATE THIS SECTION ---
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, 
+    # Add this line to automatically reconnect if the connection drops
+    pool_pre_ping=True  
+)
+# ---------------------------
 
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Dependency to get DB session in endpoints
+# Dependency
 def get_db():
     db = SessionLocal()
     try:

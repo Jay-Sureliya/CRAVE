@@ -72,18 +72,23 @@ const RestaurantRegistrationModal = ({ isOpen, onClose }) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    /* ---------- UPDATED HANDLE SUBMIT ---------- */
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            // CALL THE REAL API
             await api.post('/api/restaurant-request', formData);
-            
             setSubmitted(true);
         } catch (error) {
             console.error("Error submitting form", error);
-            alert("Something went wrong. Please try again.");
+
+            // --- FIX: READ THE BACKEND ERROR MESSAGE ---
+            if (error.response && error.response.data && error.response.data.detail) {
+                alert(`Error: ${error.response.data.detail}`); // Shows: "A request with this email already exists."
+            } else {
+                alert("Something went wrong. Please check your connection.");
+            }
         } finally {
             setLoading(false);
         }
@@ -101,7 +106,7 @@ const RestaurantRegistrationModal = ({ isOpen, onClose }) => {
                         onClick={onClose}
                         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
                     />
-                    
+
                     {/* Modal */}
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -110,8 +115,8 @@ const RestaurantRegistrationModal = ({ isOpen, onClose }) => {
                         className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
                     >
                         <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl pointer-events-auto relative mx-4">
-                            <button 
-                                onClick={onClose} 
+                            <button
+                                onClick={onClose}
                                 className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition"
                             >
                                 <X className="w-5 h-5 text-gray-600" />
@@ -151,8 +156,8 @@ const RestaurantRegistrationModal = ({ isOpen, onClose }) => {
                                             <textarea required name="address" onChange={handleChange} rows="2" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition" placeholder="123 Food Street, City"></textarea>
                                         </div>
 
-                                        <button 
-                                            type="submit" 
+                                        <button
+                                            type="submit"
                                             disabled={loading}
                                             className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-slate-800 transition flex items-center justify-center gap-2"
                                         >
@@ -167,7 +172,7 @@ const RestaurantRegistrationModal = ({ isOpen, onClose }) => {
                                     </div>
                                     <h3 className="text-2xl font-bold text-gray-900 mb-2">Application Received!</h3>
                                     <p className="text-gray-500">
-                                        Thank you for your interest. We have received your details. 
+                                        Thank you for your interest. We have received your details.
                                         Once approved, you will receive your <strong>Login Credentials</strong> via email at <span className="font-semibold text-gray-900">{formData.email}</span>.
                                     </p>
                                     <button onClick={onClose} className="mt-8 px-6 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition">
@@ -190,11 +195,11 @@ const About = () => {
 
     return (
         <div className="font-sans text-slate-900 overflow-x-hidden bg-gray-50">
-            
+
             {/* Render the Modal */}
-            <RestaurantRegistrationModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
+            <RestaurantRegistrationModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
             />
 
             <section className="pb-30 relative min-h-screen flex items-center justify-center bg-gray-50 overflow-hidden">
@@ -323,7 +328,7 @@ const About = () => {
                                     <span className="text-lg">Order Now</span>
                                 </div>
                             </motion.button>
-                            
+
                             {/* --- THIS BUTTON TRIGGERS THE MODAL --- */}
                             <motion.button
                                 onClick={() => setIsModalOpen(true)}
@@ -337,7 +342,7 @@ const About = () => {
                                     <span className="text-lg">Add Restaurant</span>
                                 </div>
                             </motion.button>
-                            
+
                             <motion.button
                                 whileHover={{ scale: 1.05, y: -5 }}
                                 whileTap={{ scale: 0.95 }}
