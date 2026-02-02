@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String , Boolean
+from sqlalchemy import Column, Integer, String, Boolean, Text
 from app.db.session import Base
 
 class User(Base):
@@ -11,7 +11,14 @@ class User(Base):
     phone = Column(String)
     hashed_password = Column(String)
     role = Column(String, default="customer")
-
+    
+    # Updated: Added profile_image with Text type for Base64 support
+    # server_default ensures the database handles the default value on refresh
+    profile_image = Column(
+        Text, 
+        default="https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+        server_default="https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+    )
 
 class Restaurant(Base):
     __tablename__ = "restaurants"
