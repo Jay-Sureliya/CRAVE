@@ -25,15 +25,15 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 app = FastAPI(title="Crave API")
 
 # ---------------- MIDDLEWARE (CORS) ----------------
+# Updated to handle specific origin and credentials for better browser compatibility
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize Database Tables
 Base.metadata.create_all(bind=engine)
 app.include_router(restaurant.router)
 
@@ -48,7 +48,6 @@ def hash_password(password):
 
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    """Creates a new user account in PostgreSQL."""
     if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Username already taken")
     
@@ -61,7 +60,8 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         phone=user.phone,
         hashed_password=hash_password(user.password),
-        role=user.role if user.role else "customer"
+        role=user.role if user.role else "customer",
+        profile_image=getattr(user, 'profile_image', "https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
     )
     db.add(new_user)
     db.commit()
@@ -70,7 +70,6 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/login", response_model=TokenResponse)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Verifies credentials and returns user_id and token for frontend storage."""
     user = db.query(User).filter(User.username == form_data.username).first()
 
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -93,47 +92,54 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "user_id": user.id
     }
 
-# ---------------- PROFILE ROUTES (ID-BASED) ----------------
+# ---------------- USER PROFILE MANAGEMENT (ID-BASED) ----------------
 
 @app.get("/users/{user_id}")
 def get_user_profile(user_id: int, db: Session = Depends(get_db)):
-    """Fetches full user details by ID for the Profile page fields."""
+    """Fetch user data by Primary Key ID and ensure all fields exist for frontend."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Returning a full dictionary ensures profile_image is never 'undefined' in React
     return {
         "id": user.id,
         "username": user.username,
         "full_name": user.full_name,
         "email": user.email,
         "phone": user.phone,
-        "role": user.role
+        "role": user.role,
+        "profile_image": user.profile_image if user.profile_image else "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
     }
 
 @app.put("/users/{user_id}")
 def update_user_profile(user_id: int, data: UserUpdate, db: Session = Depends(get_db)):
-    """Updates specific user fields in PostgreSQL by numeric ID."""
-    db_user = db.query(User).filter(User.id == user_id).first()
+    # 1. Fetch current user
+    db_user_query = db.query(User).filter(User.id == user_id)
+    db_user = db_user_query.first()
+    
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Update Username (only if provided and unique)
+    # 2. CHECK IF USERNAME IS TAKEN BY SOMEONE ELSE
     if data.username and data.username != db_user.username:
-        if db.query(User).filter(User.username == data.username).first():
+        existing_user = db.query(User).filter(User.username == data.username).first()
+        if existing_user:
+            # This detail message MUST match the frontend check exactly
             raise HTTPException(status_code=400, detail="Username already taken")
-        db_user.username = data.username
 
-    # Update other allowed fields
-    if data.full_name is not None: db_user.full_name = data.full_name
-    if data.email is not None: db_user.email = data.email
-    if data.phone is not None: db_user.phone = data.phone
+    # 3. Proceed with update
+    update_data = data.dict(exclude_unset=True)
+    try:
+        db_user_query.update(update_data, synchronize_session=False)
+        db.commit()
+        db.refresh(db_user)
+        return {"message": "Success", "user": db_user}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database update failed")
 
-    db.commit()
-    db.refresh(db_user)
-    return {"message": "Success", "username": db_user.username}
-
-# ---------------- ACCESS CONTROL ----------------
+# ---------------- DASHBOARD ACCESS ----------------
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
@@ -150,4 +156,5 @@ def admin_dashboard(current_user=Depends(get_current_user)):
 
 if __name__ == "__main__":
     import uvicorn
+    # Make sure port 8000 matches your frontend api.js baseURL
     uvicorn.run(app, host="0.0.0.0", port=8000)
