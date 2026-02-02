@@ -35,80 +35,69 @@ const AuthPage = () => {
                     headers: { "Content-Type": "application/x-www-form-urlencoded" }
                 });
 
+                // --- ERROR SOLVED HERE: SAVING CRITICAL DATA ---
+                // We must save the user_id so the Profile page can fetch data by ID
                 sessionStorage.setItem("token", res.data.access_token);
                 sessionStorage.setItem("role", res.data.role);
-                if (res.data.username) sessionStorage.setItem("username", res.data.username);
+                sessionStorage.setItem("user_id", res.data.user_id); // This prevents the "No User ID found" redirect
 
+                if (res.data.username) {
+                    sessionStorage.setItem("username", res.data.username);
+                }
+
+                // --- NAVIGATION LOGIC ---
                 if (res.data.role === "admin") navigate("/admin/dashboard");
                 else if (res.data.role === "restaurant") navigate("/restaurant/dashboard");
                 else navigate("/");
 
             } else {
+                // --- REGISTER LOGIC ---
                 try {
                     await api.post("/register", {
                         username: formData.username.trim(),
-                        full_name: formData.username.trim(), // or separate input
+                        full_name: formData.username.trim(), // Consider adding a separate full_name field in the future
                         email: formData.email.trim(),
                         phone: formData.phone.trim(),
                         password: formData.password.trim(),
                         role: "customer"
                     });
-                    alert("Customer account created! Please log in.");
+                    alert("Account created! Please log in.");
                     setIsLogin(true);
+                    // Clear fields after successful registration
+                    setFormData({ username: "", password: "", email: "", phone: "", role: "user" });
                 } catch (err) {
-                    console.error(err);
-                    // Show backend error message
                     setError(err.response?.data?.detail || "Signup failed. Try again.");
                 }
-
             }
 
         } catch (err) {
             console.error(err);
-            setError(isLogin
-                ? "Login failed. Check your credentials."
-                : "Signup failed. Username or Email might be taken.");
+            // Improved error messaging based on response
+            const message = err.response?.data?.detail ||
+                (isLogin ? "Login failed. Check your credentials." : "Signup failed. Try again.");
+            setError(message);
         }
     };
 
     return (
         <>
-            {/* Global Style to Hide Scrollbar */}
             <style>{`
-                .no-scrollbar::-webkit-scrollbar {
-                    display: none;
-                }
-                .no-scrollbar {
-                    -ms-overflow-style: none;  /* IE and Edge */
-                    scrollbar-width: none;  /* Firefox */
-                }
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
             `}</style>
 
-            {/* 1. FIXED INSET-0: Locks the container to the viewport size (No Window Scrollbar).
-                2. BG-SLATE-50: Background color.
-            */}
             <div className="pt-35 w-[95%] mx-auto fixed inset-0 overflow-hidden flex items-center justify-center">
-
-                {/* Background Pattern */}
                 <div className="absolute inset-0 w-full h-full opacity-5 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
 
-                {/* SCROLLABLE INNER WRAPPER:
-                    - 'overflow-y-auto': Allows scrolling if the card is too tall.
-                    - 'no-scrollbar': Hides the scrollbar visual.
-                    - 'h-full w-full': Fills the screen.
-                */}
                 <div className="relative h-full w-full overflow-y-auto no-scrollbar flex items-center justify-center p-4">
-
                     <motion.div
                         layout
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
                         className="bg-white p-6 sm:p-8 rounded-3xl w-full max-w-[420px] border border-slate-100 flex flex-col shadow-xl relative z-10 my-auto"
                     >
-
-                        {/* --- Header --- */}
                         <motion.div layout="position" className="text-center mb-6">
                             <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-1">
-                                {isLogin ? "Welcome Back" : "Create Customer Account"}
+                                {isLogin ? "Welcome Back" : "Create Account"}
                             </h1>
                             <p className="text-slate-500 text-xs font-medium">
                                 {isLogin ? "Enter details to sign in." : "Join us to order delicious food."}
@@ -116,8 +105,6 @@ const AuthPage = () => {
                         </motion.div>
 
                         <form onSubmit={handleSubmit} className="space-y-3">
-
-                            {/* Username */}
                             <motion.div layout="position">
                                 <label className="text-xs font-bold text-slate-700 ml-1 mb-1 block">Username</label>
                                 <div className="relative group">
@@ -136,7 +123,6 @@ const AuthPage = () => {
                                 </div>
                             </motion.div>
 
-                            {/* Expandable Section for Signup */}
                             <AnimatePresence initial={false}>
                                 {!isLogin && (
                                     <motion.div
@@ -160,7 +146,7 @@ const AuthPage = () => {
                                                         className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all placeholder:text-slate-400"
                                                         value={formData.email}
                                                         onChange={handleChange}
-                                                        required
+                                                        required={!isLogin}
                                                     />
                                                 </div>
                                             </div>
@@ -177,7 +163,7 @@ const AuthPage = () => {
                                                         className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all placeholder:text-slate-400"
                                                         value={formData.phone}
                                                         onChange={handleChange}
-                                                        required
+                                                        required={!isLogin}
                                                     />
                                                 </div>
                                             </div>
@@ -186,7 +172,6 @@ const AuthPage = () => {
                                 )}
                             </AnimatePresence>
 
-                            {/* Password */}
                             <motion.div layout="position">
                                 <label className="text-xs font-bold text-slate-700 ml-1 mb-1 block">Password</label>
                                 <div className="relative group">
@@ -205,7 +190,6 @@ const AuthPage = () => {
                                 </div>
                             </motion.div>
 
-                            {/* Error Message */}
                             <AnimatePresence>
                                 {error && (
                                     <motion.div
@@ -219,8 +203,8 @@ const AuthPage = () => {
                                 )}
                             </AnimatePresence>
 
-                            {/* Submit Button */}
                             <motion.button
+                                whileTap={{ scale: 0.98 }}
                                 layout="position"
                                 className="group w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-orange-600 transition-colors duration-300 shadow-lg hover:shadow-orange-200 flex items-center justify-center gap-2 mt-4"
                             >
@@ -229,7 +213,6 @@ const AuthPage = () => {
                             </motion.button>
                         </form>
 
-                        {/* --- Footer --- */}
                         <motion.div layout="position" className="mt-5 text-center">
                             <p className="text-slate-500 font-medium text-xs">
                                 {isLogin ? "New to Crave?" : "Already have an account?"}{' '}
