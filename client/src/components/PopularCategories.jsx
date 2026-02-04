@@ -37,18 +37,11 @@ const PopularCategories = () => {
             restaurants: 4,
             image: "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?q=80&w=2069&auto=format&fit=crop",
             alt: "Breakfast bagel"
-        },
-        {
-            id: 6,
-            title: "Soups",
-            restaurants: 32,
-            image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=2070&auto=format&fit=crop",
-            alt: "Tomato soup"
         }
     ];
 
     return (
-        <div className="w-full max-w-7xl mx-auto py-8">
+        <div className="w-[95%] mx-auto py-8">
             {/* Header Section */}
             <div className="mb-8">
                 <h2 className="text-2xl md:text-3xl font-bold text-[#03081F]">
@@ -57,14 +50,14 @@ const PopularCategories = () => {
             </div>
 
             {/* Grid Layout */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 ">
                 {categories.map((category) => (
                     <div
                         key={category.id}
                         className="group cursor-pointer rounded-xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300"
                     >
                         {/* Image Area */}
-                        <div className="h-40 w-full bg-[#F5F5F5] overflow-hidden relative">
+                        <div className="h-50 w-full bg-[#F5F5F5] overflow-hidden relative">
                             <img
                                 src={category.image}
                                 alt={category.alt}
@@ -73,7 +66,7 @@ const PopularCategories = () => {
                         </div>
 
                         {/* Text Area */}
-                        <div className="bg-[#F9F9F9] p-4 flex flex-col gap-1">
+                        <div className="bg-[#F9F9F9] p-5 flex flex-col gap-1">
                             <h3 className="font-bold text-[#03081F] text-lg leading-tight">
                                 {category.title}
                             </h3>

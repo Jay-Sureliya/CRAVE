@@ -5,6 +5,8 @@ import b3 from '../../public/b3.png';
 import Recommended from '../components/Recommended';
 import PopularCategories from '../components/PopularCategories';
 import PopularBrand from '../components/PopularBrand';
+import Ad from '../components/ad';
+import Partner from '../components/partner';
 
 const Home = () => {
     return (
@@ -95,6 +97,8 @@ const Home = () => {
                 <Recommended />
                 <PopularCategories />
                 <PopularBrand />
+                <Ad />
+                <Partner />
 
             {/* --- GLOBAL STYLES --- */}
             <style>{`

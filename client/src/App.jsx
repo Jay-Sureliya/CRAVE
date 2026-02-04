@@ -78,7 +78,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         {/* <Route
             path="/restaurant/orders"
             element={
