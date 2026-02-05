@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 # import os
 # import smtplib
 # import base64
@@ -263,23 +261,18 @@
 #     db.commit()
 #     return {"message": "Rider request rejected"}
 
->>>>>>> origin/Jay
+
 import os
 import smtplib
 import base64
-from typing import Optional, List  # <--- ADD THIS LINE HERE
+from typing import Optional, List
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
-<<<<<<< HEAD
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-=======
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks 
->>>>>>> origin/Jay
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from typing import Optional, List
 
 # --- INTERNAL IMPORTS ---
 from app.db.session import get_db
@@ -334,11 +327,7 @@ class AdminRiderResponse(BaseModel):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-<<<<<<< HEAD
-# --- CORE EMAIL SENDER (With Image Support) ---
-=======
 # --- CORE EMAIL SENDER ---
->>>>>>> origin/Jay
 def _send_email_core(to_email, subject, body, image_base64=None):
     sender_email = os.getenv("MAIL_USERNAME")
     sender_password = os.getenv("MAIL_PASSWORD")
@@ -444,14 +433,11 @@ def get_admin_stats(db: Session = Depends(get_db)):
         }
     }
 
-<<<<<<< HEAD
-=======
 @router.get("/users", response_model=List[AdminUserResponse])
 def get_all_users(db: Session = Depends(get_db)):
     return db.query(User).all()
 
 # --- RESTAURANT REQUESTS ---
->>>>>>> origin/Jay
 @router.get("/requests", response_model=List[AdminRequestResponse])
 def get_pending_requests(db: Session = Depends(get_db)):
     return db.query(RestaurantRequest).filter(RestaurantRequest.status == "pending").all()
@@ -460,18 +446,15 @@ def get_pending_requests(db: Session = Depends(get_db)):
 def approve_restaurant(request_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     req = db.query(RestaurantRequest).filter(RestaurantRequest.id == request_id).first()
     if not req: raise HTTPException(status_code=404, detail="Request not found")
-    if req.status == "approved": return {"message": "Already approved"}
-
-<<<<<<< HEAD
+    
     if req.status == "approved":
         return {"message": "Already approved"}
 
-=======
->>>>>>> origin/Jay
     generated_username = req.email.split("@")[0] + "_owner"
     temp_password = "Pass" + str(req.id) + "word!" 
     hashed_pw = get_password_hash(temp_password)
 
+    # 1. Create/Check User Account
     existing_user = db.query(User).filter(User.email == req.email).first()
     if not existing_user:
         new_user = User(
@@ -481,31 +464,25 @@ def approve_restaurant(request_id: int, background_tasks: BackgroundTasks, db: S
         )
         db.add(new_user)
         db.commit()
-<<<<<<< HEAD
         db.refresh(new_user)
     else:
         generated_username = existing_user.username
         temp_password = "[Existing Password]"
 
+    # 2. Create/Check Restaurant Profile
     existing_restaurant = db.query(Restaurant).filter(Restaurant.email == req.email).first()
     if not existing_restaurant:
         new_restaurant = Restaurant(
-            name=req.restaurant_name,
-            email=req.email,
+            name=req.restaurant_name, 
+            email=req.email, 
             password=hashed_pw,
-            is_active=True,
-=======
-    
-    existing_restaurant = db.query(Restaurant).filter(Restaurant.email == req.email).first()
-    if not existing_restaurant:
-        new_restaurant = Restaurant(
-            name=req.restaurant_name, email=req.email, password=hashed_pw,
-            is_active=True, address=req.address
->>>>>>> origin/Jay
+            is_active=True, 
+            address=req.address
         )
         db.add(new_restaurant)
         db.commit()
 
+    # 3. Update Request Status
     req.status = "approved"
     db.commit()
 
