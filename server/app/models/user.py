@@ -78,6 +78,8 @@ class User(Base):
     phone = Column(String)
     hashed_password = Column(String)
     role = Column(String, default="customer")
+
+    rider_profile = relationship("Rider", back_populates="user", uselist=False)
     
     profile_image = Column(
         Text, 

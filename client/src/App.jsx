@@ -13,6 +13,7 @@ import MainLayout from "./components/MainLayout.jsx";
 import Profile from "./pages/Profile.jsx";
 import RestaurantsList from "./pages/RestaurantsList.jsx";
 import RestaurantDetails from "./pages/RestaurantDetails.jsx";
+import RiderDashboard from "./pages/RiderDashboard.jsx";
 
 // --- PLACEHOLDERS ---
 const OrderFood = () => <div className="p-20 text-center text-2xl">🍔 Customer Menu (Order Now Page)</div>;
@@ -78,22 +79,14 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* <Route
-            path="/restaurant/orders"
-            element={
-              <ProtectedRoute role="restaurant">
-                <RestaurantOrders />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/restaurant/menu"
-            element={
-              <ProtectedRoute role="restaurant">
-                <RestaurantMenu />
-              </ProtectedRoute>
-            }
-          /> */}
+        <Route
+          path="/rider/dashboard"
+          element={
+            <ProtectedRoute role="driver">
+              <RiderDashboard />
+            </ProtectedRoute>
+          }
+        />
 
       </Routes>
     </BrowserRouter>

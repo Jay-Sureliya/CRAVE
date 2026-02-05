@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api"; 
 import { 
   LayoutDashboard, Users, Store, Utensils, LogOut, Search, 
   CheckCircle, XCircle, Home, Trash2, MoreVertical, Bike,
-  Mail, MapPin, Phone, Ban, Clock // Added Ban and Clock icons
+  Ban, Clock, FileText, MapPin, Bell, X, DollarSign, Star, Calendar
 } from "lucide-react";
 
 // --- TOAST COMPONENT ---
@@ -13,7 +13,7 @@ const Toast = ({ message, type, onClose }) => {
     const timer = setTimeout(onClose, 3000);
     return () => clearTimeout(timer);
   }, [onClose]);
-
+  
   const bgColors = { success: "bg-emerald-600", error: "bg-red-600", info: "bg-blue-600" };
 
   return (
@@ -24,39 +24,172 @@ const Toast = ({ message, type, onClose }) => {
   );
 };
 
+// --- DETAIL MODAL COMPONENT ---
+const DetailModal = ({ data, type, onClose }) => {
+  if (!data) return null;
+
+  // Mock data generator for demonstration (since backend might not provide deep stats yet)
+  const mockStats = {
+    totalSpent: "₹12,450",
+    lastOrder: "2 days ago",
+    rating: 4.8,
+    earnings: "₹45,200",
+    ordersCompleted: 142,
+    joinDate: "Jan 12, 2024"
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl animate-fade-in-up">
+        {/* Header */}
+        <div className="bg-slate-900 p-6 flex justify-between items-start text-white">
+          <div className="flex gap-4 items-center">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold ${type === 'restaurant' ? 'bg-orange-500' : type === 'rider' ? 'bg-cyan-500' : 'bg-blue-500'}`}>
+              {data.name ? data.name[0] : data.username ? data.username[0] : "?"}
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">{data.name || data.username || data.restaurant_name}</h2>
+              <p className="text-slate-400 text-sm uppercase tracking-wider font-bold">{type}</p>
+              <div className="flex items-center gap-2 mt-1 text-xs text-slate-300">
+                <span className="px-2 py-0.5 rounded bg-white/20">ID: {data.id}</span>
+                <span>• {mockStats.joinDate}</span>
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition"><X size={20} /></button>
+        </div>
+
+        {/* Body */}
+        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+          
+          {/* Column 1: Contact & Info */}
+          <div className="space-y-6">
+            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Details</h3>
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gray-50 rounded-lg"><Users size={18} className="text-gray-500"/></div>
+                <div><p className="text-xs text-gray-400">Email</p><p className="font-medium text-gray-900">{data.email}</p></div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gray-50 rounded-lg"><MapPin size={18} className="text-gray-500"/></div>
+                <div><p className="text-xs text-gray-400">Location/Address</p><p className="font-medium text-gray-900">{data.address || data.city || "Not Provided"}</p></div>
+              </div>
+              {type === 'rider' && (
+                 <div className="flex items-center gap-3">
+                   <div className="p-2 bg-gray-50 rounded-lg"><Bike size={18} className="text-gray-500"/></div>
+                   <div><p className="text-xs text-gray-400">Vehicle</p><p className="font-medium text-gray-900 capitalize">{data.vehicleType || "Motorcycle"}</p></div>
+                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* Column 2: Stats & Activity */}
+          <div className="space-y-6">
+            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Activity</h3>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-gray-50 rounded-2xl">
+                <DollarSign className="text-green-600 mb-2" size={20}/>
+                <p className="text-xs text-gray-500">{type === 'customer' ? 'Total Spent' : 'Total Earnings'}</p>
+                <p className="text-xl font-bold text-gray-900">{type === 'customer' ? mockStats.totalSpent : mockStats.earnings}</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-2xl">
+                <Star className="text-orange-500 mb-2" size={20}/>
+                <p className="text-xs text-gray-500">Rating</p>
+                <p className="text-xl font-bold text-gray-900">{mockStats.rating} <span className="text-xs text-gray-400 font-normal">/ 5.0</span></p>
+              </div>
+            </div>
+
+            {type === 'restaurant' && (
+               <div className="p-4 border border-gray-100 rounded-xl">
+                  <p className="text-sm font-bold text-gray-900 mb-2">Top Menu Items</p>
+                  <ul className="text-sm text-gray-600 space-y-1 list-disc pl-4">
+                    <li>Butter Chicken</li>
+                    <li>Garlic Naan</li>
+                    <li>Paneer Tikka</li>
+                  </ul>
+               </div>
+            )}
+             {type === 'customer' && (
+               <div className="p-4 border border-gray-100 rounded-xl">
+                  <p className="text-sm font-bold text-gray-900 mb-2">Recent Order</p>
+                  <p className="text-sm text-gray-600">2x Pizza, 1x Coke from <strong>Domino's</strong></p>
+                  <p className="text-xs text-gray-400 mt-1">{mockStats.lastOrder}</p>
+               </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+           <button onClick={onClose} className="px-6 py-2 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-100 transition">Close</button>
+           <button className="px-6 py-2 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition">View Full History</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [requestSubTab, setRequestSubTab] = useState("restaurant"); 
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState(null); 
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Notification State
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Detail Modal State
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [detailType, setDetailType] = useState(null); // 'restaurant', 'rider', 'customer'
+
   // Data States
-  const [requests, setRequests] = useState([]);
+  const [restaurantRequests, setRestaurantRequests] = useState([]); 
+  const [riderRequests, setRiderRequests] = useState([]); 
   const [activeRestaurants, setActiveRestaurants] = useState([]);
   const [users, setUsers] = useState([]);
 
   // --- FETCH DATA ---
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [requestsRes, restaurantsRes, usersRes] = await Promise.allSettled([
-          api.get("/admin/requests"),
-          api.get("/restaurants"),
-          api.get("/admin/users")
-        ]);
-        
-        if(requestsRes.status === "fulfilled") setRequests(requestsRes.value.data);
-        if(restaurantsRes.status === "fulfilled") setActiveRestaurants(restaurantsRes.value.data);
-        if(usersRes.status === "fulfilled") setUsers(usersRes.value.data);
+  const fetchData = async (isPolling = false) => {
+    try {
+      const [reqRes, riderReqRes, restaurantsRes, usersRes] = await Promise.allSettled([
+        api.get("/admin/requests"),        
+        api.get("/admin/rider-requests"),   
+        api.get("/restaurants"),
+        api.get("/admin/users")
+      ]);
+      
+      if(reqRes.status === "fulfilled") setRestaurantRequests(reqRes.value.data);
+      if(riderReqRes.status === "fulfilled") setRiderRequests(riderReqRes.value.data);
+      if(restaurantsRes.status === "fulfilled") setActiveRestaurants(restaurantsRes.value.data);
+      if(usersRes.status === "fulfilled") setUsers(usersRes.value.data);
 
-      } catch (err) {
-        console.error("Critical Error fetching data:", err);
-      } finally {
-        setIsLoading(false);
+      // Notification Logic
+      if (reqRes.status === "fulfilled" && riderReqRes.status === "fulfilled") {
+         const newNotes = [];
+         if (reqRes.value.data.length > 0) newNotes.push({ id: 1, text: `${reqRes.value.data.length} Pending Restaurants`, type: 'alert' });
+         if (riderReqRes.value.data.length > 0) newNotes.push({ id: 2, text: `${riderReqRes.value.data.length} Pending Riders`, type: 'info' });
+         setNotifications(newNotes);
       }
-    };
+
+    } catch (err) {
+      console.error("Critical Error fetching data:", err);
+    } finally {
+      if(!isPolling) setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
+    // POLLING: Check for new data every 30 seconds
+    const interval = setInterval(() => {
+        fetchData(true);
+    }, 30000); 
+    return () => clearInterval(interval);
   }, []);
 
   // Filter Data
@@ -67,8 +200,8 @@ const AdminDashboard = () => {
   const customerCount = customerList.length;
   const driverCount = riderList.length;
   const restaurantCount = activeRestaurants.length;
+  const totalPending = restaurantRequests.length + riderRequests.length;
 
-  // Handlers
   const showToast = (message, type) => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -80,59 +213,86 @@ const AdminDashboard = () => {
     navigate("/login");
   };
 
-  // --- RESTAURANT ACTIONS ---
-  const handleApprove = async (id) => {
+  // --- MODAL HANDLER ---
+  const openDetailModal = (item, type) => {
+      setSelectedItem(item);
+      setDetailType(type);
+  };
+
+  // --- ACTIONS ---
+  const handleApproveRestaurant = async (e, id) => {
+    e.stopPropagation(); // Prevent row click
     try {
-      setRequests(prev => prev.filter(req => req.id !== id));
-      showToast("Approved & Created!", "success");
+      setRestaurantRequests(prev => prev.filter(req => req.id !== id));
+      showToast("Restaurant Approved!", "success");
       await api.post(`/admin/approve/${id}`);
-      const res = await api.get("/restaurants"); // Refresh list
-      setActiveRestaurants(res.data);
+      fetchData(true); // Refresh list
     } catch (error) {
-       console.error("Approval Failed", error);
        showToast("Failed to approve.", "error");
     }
   };
 
-  const handleReject = async (id) => {
+  const handleRejectRestaurant = async (e, id) => {
+    e.stopPropagation();
     if(!window.confirm("Reject this application?")) return;
     try {
-      setRequests(prev => prev.filter(req => req.id !== id));
+      setRestaurantRequests(prev => prev.filter(req => req.id !== id));
       await api.post(`/admin/reject/${id}`);
       showToast("Application rejected.", "info");
     } catch (error) {
-      console.error(error);
       showToast("Failed to reject.", "error");
     }
   };
 
-  const handleDeleteRestaurant = async (id) => {
-    if(!window.confirm("Permanently delete this restaurant?")) return;
+  const handleApproveRider = async (e, id) => {
+    e.stopPropagation();
+    try {
+      setRiderRequests(prev => prev.filter(req => req.id !== id));
+      showToast("Rider Approved & Created!", "success");
+      await api.post(`/admin/rider-approve/${id}`); 
+      fetchData(true);
+    } catch (error) {
+       console.error(error);
+       showToast("Failed to approve rider.", "error");
+    }
+  };
+
+  const handleRejectRider = async (e, id) => {
+    e.stopPropagation();
+    if(!window.confirm("Reject this rider application?")) return;
+    try {
+      setRiderRequests(prev => prev.filter(req => req.id !== id));
+      await api.post(`/admin/rider-reject/${id}`);
+      showToast("Rider application rejected.", "info");
+    } catch (error) {
+      showToast("Failed to reject.", "error");
+    }
+  };
+
+  const handleDeleteRestaurant = async (e, id) => {
+    e.stopPropagation();
+    if(!window.confirm("Permanently delete?")) return;
     try {
       setActiveRestaurants(prev => prev.filter(r => r.id !== id));
       await api.delete(`/admin/restaurants/${id}`);
       showToast("Restaurant deleted.", "error");
     } catch (error) {
-       console.error("Delete failed", error);
        showToast("Failed to delete.", "error");
     }
   };
 
-  // --- CUSTOMER ACTIONS (NEW) ---
-  const handleSuspendUser = async (userId) => {
-    if(!window.confirm("Suspend this user for 7 Days?")) return;
-    // Here you would typically call an API endpoint like: await api.post(`/admin/users/${userId}/suspend`, { days: 7 });
-    // For now, we simulate success:
-    showToast("User suspended for 7 days.", "info");
+  const handleSuspendUser = async (e, userId) => {
+    e.stopPropagation();
+    if(!window.confirm("Suspend user for 7 Days?")) return;
+    showToast("User suspended.", "info");
   };
 
-  const handleTerminateUser = async (userId) => {
-    if(!window.confirm("PERMANENTLY Terminate this account? This cannot be undone.")) return;
+  const handleTerminateUser = async (e, userId) => {
+    e.stopPropagation();
+    if(!window.confirm("Terminate account?")) return;
     try {
-        // Assuming you might add a generic delete user endpoint later, or reuse a delete logic
-        // await api.delete(`/admin/users/${userId}`); 
-        setUsers(users.filter(u => u.id !== userId)); // UI Update
-        showToast("Account terminated successfully.", "error");
+        setUsers(users.filter(u => u.id !== userId)); 
+        showToast("Account terminated.", "error");
     } catch (error) {
         showToast("Failed to terminate.", "error");
     }
@@ -141,8 +301,12 @@ const AdminDashboard = () => {
   return (
     <>
       <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
-
+      
+      {/* Toast Notification */}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      
+      {/* Detail Modal */}
+      {selectedItem && <DetailModal data={selectedItem} type={detailType} onClose={() => setSelectedItem(null)} />}
 
       <div className="flex h-screen w-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-hidden">
         {/* SIDEBAR */}
@@ -163,7 +327,7 @@ const AdminDashboard = () => {
             
             <div className="px-4 mt-6 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Management</div>
             <NavItem icon={<Utensils size={20} />} label="All Restaurants" count={activeRestaurants.length} isActive={activeTab === "active_restaurants"} onClick={() => setActiveTab("active_restaurants")} />
-            <NavItem icon={<Store size={20} />} label="Approval Requests" count={requests.length > 0 ? requests.length : null} isActive={activeTab === "requests"} onClick={() => setActiveTab("requests")} />
+            <NavItem icon={<FileText size={20} />} label="Requests" count={totalPending > 0 ? totalPending : null} isActive={activeTab === "requests"} onClick={() => setActiveTab("requests")} />
 
             <div className="px-4 mt-6 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">People</div>
             <NavItem icon={<Bike size={20} />} label="All Riders" count={driverCount} isActive={activeTab === "riders"} onClick={() => setActiveTab("riders")} />
@@ -181,7 +345,9 @@ const AdminDashboard = () => {
         </aside>
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 h-full overflow-y-auto no-scrollbar bg-[#F8F9FA] p-8 md:p-12">
+        <main className="flex-1 h-full overflow-y-auto no-scrollbar bg-[#F8F9FA] p-8 md:p-12 relative">
+          
+          {/* HEADER: Title + Search + Notification */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
             <div>
               <h2 className="text-3xl font-bold text-gray-900">
@@ -192,13 +358,45 @@ const AdminDashboard = () => {
                 {activeTab === 'customers' && 'Customer Database'}
               </h2>
               <p className="text-gray-500 mt-1">
-                {activeTab === 'dashboard' ? `Welcome back! You have ${requests.length} pending requests.` : 'Manage your platform data.'}
+                {activeTab === 'dashboard' ? `You have ${totalPending} pending requests.` : 'Manage your platform data.'}
               </p>
             </div>
             
-            <div className="relative group">
-               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors" size={18} />
-               <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search..." className="pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-full text-sm focus:ring-2 focus:ring-black/5 focus:border-black outline-none w-72 shadow-sm transition-all" />
+            <div className="flex items-center gap-4">
+               {/* NOTIFICATION CENTER */}
+               <div className="relative">
+                  <button onClick={() => setShowNotifications(!showNotifications)} className="p-3 bg-white border border-gray-200 rounded-full text-gray-500 hover:text-black hover:shadow-md transition-all relative">
+                    <Bell size={20} />
+                    {totalPending > 0 && <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>}
+                  </button>
+                  
+                  {/* Dropdown */}
+                  {showNotifications && (
+                    <div className="absolute right-0 mt-3 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden animate-fade-in-up">
+                      <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                        <span className="font-bold text-sm">Notifications</span>
+                        <span className="text-xs text-orange-500 font-bold">{notifications.length} New</span>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="p-6 text-center text-gray-400 text-xs">No new alerts</div>
+                        ) : (
+                          notifications.map(n => (
+                            <div key={n.id} onClick={() => { setActiveTab('requests'); setShowNotifications(false); }} className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0">
+                              <p className="text-sm font-medium text-gray-800">{n.text}</p>
+                              <p className="text-xs text-gray-400 mt-1">Just now</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+               </div>
+
+               <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors" size={18} />
+                  <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search..." className="pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-full text-sm focus:ring-2 focus:ring-black/5 focus:border-black outline-none w-64 shadow-sm transition-all" />
+               </div>
             </div>
           </div>
 
@@ -218,12 +416,12 @@ const AdminDashboard = () => {
                         <StatCard label="Active Restaurants" value={restaurantCount} icon={<Utensils className="text-white" size={24} />} color="bg-orange-600" />
                         <StatCard label="All Riders" value={driverCount} icon={<Bike className="text-white" size={24} />} color="bg-emerald-600" />
                     </div>
-                    {/* Recent Requests Preview */}
+
                     <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mt-6">
-                        <h3 className="font-bold text-gray-900 mb-4">Pending Approvals</h3>
-                        {requests.length === 0 ? <p className="text-gray-400 text-sm">No pending requests.</p> : (
+                        <h3 className="font-bold text-gray-900 mb-4">Pending Approvals (Restaurants)</h3>
+                        {restaurantRequests.length === 0 ? <p className="text-gray-400 text-sm">No pending restaurant requests.</p> : (
                           <div className="space-y-4">
-                            {requests.slice(0, 3).map(req => (
+                            {restaurantRequests.slice(0, 3).map(req => (
                               <div key={req.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                                  <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center font-bold text-gray-700">{req.restaurant_name ? req.restaurant_name[0] : "R"}</div>
@@ -247,11 +445,13 @@ const AdminDashboard = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {activeRestaurants.filter(r => r.name?.toLowerCase().includes(searchTerm.toLowerCase())).map(r => (
-                            <tr key={r.id} className="hover:bg-gray-50/50">
+                            <tr key={r.id} onClick={() => openDetailModal(r, 'restaurant')} className="hover:bg-gray-50/50 cursor-pointer transition-colors">
                               <td className="px-6 py-4 font-bold text-gray-900">{r.name}</td>
                               <td className="px-6 py-4 text-gray-500 text-sm">{r.address || r.location || "N/A"}</td>
                               <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${r.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{r.is_active ? "Active" : "Inactive"}</span></td>
-                              <td className="px-6 py-4 text-right"><button onClick={() => handleDeleteRestaurant(r.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button></td>
+                              <td className="px-6 py-4 text-right">
+                                <button onClick={(e) => handleDeleteRestaurant(e, r.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -262,28 +462,63 @@ const AdminDashboard = () => {
                 {/* 3. REQUESTS */}
                 {activeTab === 'requests' && (
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
-                       <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
-                         <tr><th className="px-6 py-4">Applicant</th><th className="px-6 py-4">Contact</th><th className="px-6 py-4 text-right">Decision</th></tr>
-                       </thead>
-                       <tbody className="divide-y divide-gray-100">
-                         {requests.map(req => (
-                           <tr key={req.id}>
-                             <td className="px-6 py-4"><p className="font-bold text-gray-900">{req.restaurant_name}</p><span className="text-xs text-gray-400">{req.address}</span></td>
-                             <td className="px-6 py-4 text-sm text-gray-600"><div>{req.owner_name}</div><div>{req.email}</div></td>
-                             <td className="px-6 py-4 text-right space-x-3">
-                               <button onClick={() => handleReject(req.id)} className="px-3 py-1.5 border border-gray-200 rounded text-xs font-bold hover:bg-red-50 text-red-600">Reject</button>
-                               <button onClick={() => handleApprove(req.id)} className="px-3 py-1.5 bg-black text-white rounded text-xs font-bold hover:bg-green-600">Approve</button>
-                             </td>
-                           </tr>
-                         ))}
-                       </tbody>
-                    </table>
-                    {requests.length === 0 && <div className="p-16 text-center text-gray-500"><CheckCircle size={32} className="text-green-500 mb-4 inline-block"/><p>No pending applications.</p></div>}
+                    <div className="flex border-b border-gray-100">
+                      <button onClick={() => setRequestSubTab('restaurant')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${requestSubTab === 'restaurant' ? 'text-orange-600 border-b-2 border-orange-600 bg-orange-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>
+                        <Store size={18} /> Restaurant ({restaurantRequests.length})
+                      </button>
+                      <button onClick={() => setRequestSubTab('rider')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${requestSubTab === 'rider' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>
+                        <Bike size={18} /> Rider ({riderRequests.length})
+                      </button>
+                    </div>
+
+                    {/* RESTAURANT TABLE */}
+                    {requestSubTab === 'restaurant' && (
+                      <table className="w-full text-left">
+                           <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
+                             <tr><th className="px-6 py-4">Restaurant</th><th className="px-6 py-4">Owner Info</th><th className="px-6 py-4 text-right">Decision</th></tr>
+                           </thead>
+                           <tbody className="divide-y divide-gray-100">
+                             {restaurantRequests.map(req => (
+                               <tr key={req.id}>
+                                 <td className="px-6 py-4"><p className="font-bold text-gray-900">{req.restaurant_name}</p><span className="text-xs text-gray-400">{req.address}</span></td>
+                                 <td className="px-6 py-4 text-sm text-gray-600"><div>{req.owner_name}</div><div className="text-xs">{req.email}</div></td>
+                                 <td className="px-6 py-4 text-right space-x-3">
+                                   <button onClick={(e) => handleRejectRestaurant(e, req.id)} className="px-3 py-1.5 border border-gray-200 rounded text-xs font-bold hover:bg-red-50 text-red-600">Reject</button>
+                                   <button onClick={(e) => handleApproveRestaurant(e, req.id)} className="px-3 py-1.5 bg-black text-white rounded text-xs font-bold hover:bg-gray-800">Approve</button>
+                                 </td>
+                               </tr>
+                             ))}
+                           </tbody>
+                      </table>
+                    )}
+
+                    {/* RIDER TABLE */}
+                    {requestSubTab === 'rider' && (
+                        <table className="w-full text-left">
+                           <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
+                             <tr><th className="px-6 py-4">Rider</th><th className="px-6 py-4">Vehicle</th><th className="px-6 py-4">Contact</th><th className="px-6 py-4 text-right">Decision</th></tr>
+                           </thead>
+                           <tbody className="divide-y divide-gray-100">
+                             {riderRequests.map(req => (
+                               <tr key={req.id}>
+                                 <td className="px-6 py-4"><p className="font-bold text-gray-900">{req.fullName}</p></td>
+                                 <td className="px-6 py-4"><span className="capitalize px-2 py-1 rounded-md text-xs font-bold bg-gray-100 text-gray-700">{req.vehicleType || "Bike"}</span></td>
+                                 <td className="px-6 py-4 text-sm text-gray-600"><div>{req.email}</div><div className="text-xs font-bold flex items-center gap-1"><MapPin size={10} /> {req.city}</div></td>
+                                 <td className="px-6 py-4 text-right space-x-3">
+                                   <button onClick={(e) => handleRejectRider(e, req.id)} className="px-3 py-1.5 border border-gray-200 rounded text-xs font-bold hover:bg-red-50 text-red-600">Reject</button>
+                                   <button onClick={(e) => handleApproveRider(e, req.id)} className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700">Approve</button>
+                                 </td>
+                               </tr>
+                             ))}
+                           </tbody>
+                        </table>
+                    )}
+                    {(requestSubTab === 'restaurant' && restaurantRequests.length === 0) && <div className="p-16 text-center text-gray-500">No pending restaurant applications.</div>}
+                    {(requestSubTab === 'rider' && riderRequests.length === 0) && <div className="p-16 text-center text-gray-500">No pending rider applications.</div>}
                   </div>
                 )}
 
-                {/* 4. RIDERS */}
+                {/* 4. RIDERS (EXISTING FLEET) */}
                 {activeTab === 'riders' && (
                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                       <table className="w-full text-left">
@@ -292,7 +527,7 @@ const AdminDashboard = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {riderList.filter(u => u.username?.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
-                            <tr key={u.id} className="hover:bg-gray-50/50">
+                            <tr key={u.id} onClick={() => openDetailModal(u, 'rider')} className="hover:bg-gray-50/50 cursor-pointer transition-colors">
                               <td className="px-6 py-4 flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center text-xs font-bold text-cyan-700">{u.username ? u.username[0] : "R"}</div>
                                 <div><p className="font-bold text-sm">{u.username || "Unknown"}</p><p className="text-xs text-gray-400">ID: {u.id}</p></div>
@@ -308,57 +543,27 @@ const AdminDashboard = () => {
                    </div>
                 )}
 
-                {/* 5. CUSTOMERS (UPDATED) */}
+                {/* 5. CUSTOMERS */}
                 {activeTab === 'customers' && (
                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                       <table className="w-full text-left">
                         <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
-                          <tr>
-                            <th className="px-6 py-4">Customer</th>
-                            <th className="px-6 py-4">Email</th>
-                            {/* Replaced Role with Phone and Status */}
-                            <th className="px-6 py-4">Phone</th>
-                            <th className="px-6 py-4">Status</th>
-                            <th className="px-6 py-4 text-right">Actions</th>
-                          </tr>
+                          <tr><th className="px-6 py-4">Customer</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Phone</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {customerList.filter(u => u.username?.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
-                            <tr key={u.id} className="hover:bg-gray-50/50">
-                              {/* 1. Customer Name */}
+                            <tr key={u.id} onClick={() => openDetailModal(u, 'customer')} className="hover:bg-gray-50/50 cursor-pointer transition-colors">
                               <td className="px-6 py-4 flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-700">{u.username ? u.username[0] : "C"}</div>
                                 <p className="font-bold text-sm">{u.username || "Unknown"}</p>
                               </td>
-                              
-                              {/* 2. Email */}
                               <td className="px-6 py-4 text-sm text-gray-500">{u.email}</td>
-                              
-                              {/* 3. Phone (Replaced Role) */}
                               <td className="px-6 py-4 text-sm text-gray-600">{u.phone || "N/A"}</td>
-
-                              {/* 4. Status (Placeholder for now) */}
-                              <td className="px-6 py-4">
-                                <span className="px-2 py-1 rounded-md text-xs font-bold bg-green-100 text-green-700">Active</span>
-                              </td>
-
-                              {/* 5. Actions: Suspend & Terminate */}
+                              <td className="px-6 py-4"><span className="px-2 py-1 rounded-md text-xs font-bold bg-green-100 text-green-700">Active</span></td>
                               <td className="px-6 py-4 text-right">
                                 <div className="flex items-center justify-end gap-2">
-                                    <button 
-                                        onClick={() => handleSuspendUser(u.id)}
-                                        title="Suspend for 7 Days"
-                                        className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                                    >
-                                        <Clock size={18} />
-                                    </button>
-                                    <button 
-                                        onClick={() => handleTerminateUser(u.id)}
-                                        title="Terminate Account"
-                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    >
-                                        <Ban size={18} />
-                                    </button>
+                                    <button onClick={(e) => handleSuspendUser(e, u.id)} className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"><Clock size={18} /></button>
+                                    <button onClick={(e) => handleTerminateUser(e, u.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Ban size={18} /></button>
                                 </div>
                               </td>
                             </tr>
