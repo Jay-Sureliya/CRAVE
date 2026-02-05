@@ -1,16 +1,24 @@
-// src/components/MainLayout.jsx
-import React from 'react';
-import { Outlet } from 'react-router-dom';
-import Navbar from './Navbar';
+import React, { useState } from "react";
+import { Outlet } from "react-router-dom";
+import Navbar from "./Navbar"; // This Navbar contains TopBanner
 
 const MainLayout = () => {
+  // --- STATE LIFTED UP ---
+  // This state controls the popup visibility globally
+  const [isMapOpen, setIsMapOpen] = useState(false);
+
   return (
-    <>
-      <Navbar />
-      <div> {/* Add padding for fixed navbar */}
-        <Outlet /> {/* This renders the child route (Home, About, etc.) */}
-      </div>
-    </>
+    <div className="flex flex-col min-h-screen">
+      
+      {/* Pass the state setters to Navbar -> TopBanner */}
+      <Navbar isMapOpen={isMapOpen} setIsMapOpen={setIsMapOpen} />
+      
+      <main className="flex-grow">
+        <Outlet />
+      </main>
+      
+      {/* <Footer /> */}
+    </div>
   );
 };
 

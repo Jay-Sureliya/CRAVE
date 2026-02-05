@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // import React, { useEffect, useState } from "react";
 // import { useNavigate } from "react-router-dom";
 // import api from "../../services/api"; 
@@ -393,6 +394,8 @@
 // export default AdminDashboard;
 
 
+=======
+>>>>>>> origin/Jay
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api"; 

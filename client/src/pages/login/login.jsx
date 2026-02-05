@@ -41,18 +41,22 @@ const AuthPage = () => {
                 sessionStorage.setItem("token", res.data.access_token);
                 sessionStorage.setItem("role", res.data.role);
                 sessionStorage.setItem("restaurant_id", res.data.restaurant_id);
-
-                // Ensure user_id is saved as a string
                 sessionStorage.setItem("user_id", String(res.data.user_id));
 
                 if (res.data.username) {
                     sessionStorage.setItem("username", res.data.username);
                 }
 
-                // NAVIGATION LOGIC
-                if (res.data.role === "admin") navigate("/admin/dashboard");
-                else if (res.data.role === "restaurant") navigate("/restaurant/dashboard");
-                else navigate("/");
+                // --- UPDATED NAVIGATION LOGIC ---
+                if (res.data.role === "admin") {
+                    navigate("/admin/dashboard");
+                } else if (res.data.role === "restaurant") {
+                    navigate("/restaurant/dashboard");
+                } else if (res.data.role === "driver") { // <--- ADDED THIS CHECK
+                    navigate("/rider/dashboard");
+                } else {
+                    navigate("/");
+                }
 
             } else {
                 // --- REGISTER LOGIC ---
