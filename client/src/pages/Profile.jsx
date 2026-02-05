@@ -4,7 +4,7 @@ import api from "../services/api";
 import {
   Edit2, Check, X, LogOut, Camera, Home,
   User as UserIcon, Mail, Phone, ShieldCheck,
-  Fingerprint
+  Fingerprint, Lock, Key
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -12,6 +12,8 @@ const Profile = () => {
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // User State
   const [user, setUser] = useState({
     username: "",
     full_name: "",
@@ -21,22 +23,22 @@ const Profile = () => {
     role: ""
   });
 
+  // Password State (Only sent if changed)
+  const [passwords, setPasswords] = useState({
+    newPassword: "",
+    confirmPassword: ""
+  });
+
   useEffect(() => {
     const fetchProfile = async () => {
-      // 1. Retrieve the ID from sessionStorage
       const userId = sessionStorage.getItem("user_id");
-
-      // 2. Safety check: If ID is missing, the user isn't logged in
       if (!userId || userId === "undefined") {
         navigate("/login");
         return;
       }
 
       try {
-        // 3. Explicitly fetch from your Port 5000 backend
         const res = await api.get(`/users/${userId}`);
-
-        // 4. Update the state with confirmed data from the DB
         setUser(res.data);
         setLoading(false);
       } catch (err) {
@@ -57,7 +59,7 @@ const Profile = () => {
         img.src = reader.result;
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 400; // Resize to max 400px width
+          const MAX_WIDTH = 400;
           const scaleSize = MAX_WIDTH / img.width;
           canvas.width = MAX_WIDTH;
           canvas.height = img.height * scaleSize;
@@ -65,7 +67,6 @@ const Profile = () => {
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-          // Convert to compressed JPEG (quality 0.7 = 70%)
           const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
           setUser({ ...user, profile_image: compressedBase64 });
         };
@@ -77,12 +78,19 @@ const Profile = () => {
   const handleSave = async () => {
     const userId = sessionStorage.getItem("user_id");
 
+    // Password Validation
+    if (passwords.newPassword && passwords.newPassword !== passwords.confirmPassword) {
+      alert("❌ Passwords do not match!");
+      return;
+    }
+
     const payload = {
-      username: user?.username?.trim(), // Trim whitespace to prevent DB issues
+      username: user?.username?.trim(),
       full_name: user?.full_name,
       email: user?.email,
       phone: user?.phone,
-      profile_image: user?.profile_image
+      profile_image: user?.profile_image,
+      password: passwords.newPassword || undefined // Only send if set
     };
 
     try {
@@ -91,18 +99,16 @@ const Profile = () => {
       if (res.status === 200) {
         sessionStorage.setItem("username", user.username);
         setIsEditing(false);
+        setPasswords({ newPassword: "", confirmPassword: "" }); // Reset passwords
         alert("Profile updated successfully! ✅");
-        window.location.reload();
       }
     } catch (err) {
-      // This looks for the specific "detail" message sent by your FastAPI backend
       const errorMessage = err.response?.data?.detail;
-
       if (errorMessage === "Username already taken") {
-        alert("❌ This username is already in use. Please choose another one.");
+        alert("❌ This username is already in use.");
       } else {
         console.error("Save failed:", errorMessage);
-        alert(`❌ Update failed: ${errorMessage || "Internal Server Error"}`);
+        alert(`❌ Update failed: ${errorMessage || "Check console"}`);
       }
     }
   };
@@ -155,7 +161,7 @@ const Profile = () => {
           <div className="mt-8 space-y-1 text-white">
             <h2 className="text-2xl font-black tracking-tight">{user.username}</h2>
             <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-widest border border-white/30">
-              <ShieldCheck size={12} /> {user.role || 'Partner'}
+              <ShieldCheck size={12} /> {user.role || 'User'}
             </div>
           </div>
 
@@ -177,18 +183,18 @@ const Profile = () => {
         </div>
 
         {/* --- RIGHT SIDE: Content --- */}
-        <div className="flex-1 p-8 sm:p-14 bg-white">
+        <div className="flex-1 p-8 sm:p-14 bg-white overflow-y-auto max-h-[90vh] custom-scrollbar">
           <div className="flex justify-between items-end mb-12">
             <div>
-              <p className="text-orange-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">Merchant Portal</p>
-              <h1 className="text-4xl font-black text-slate-800">Account Settings</h1>
+              <p className="text-orange-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">My Account</p>
+              <h1 className="text-4xl font-black text-slate-800">Profile Settings</h1>
             </div>
 
             <div className="flex gap-3">
               {isEditing ? (
                 <div className="flex gap-2">
                   <button onClick={handleSave} className="p-4 bg-green-500 text-white rounded-2xl hover:bg-green-600 shadow-lg transition-all"><Check size={20} /></button>
-                  <button onClick={() => setIsEditing(false)} className="p-4 bg-slate-100 text-slate-500 rounded-2xl hover:bg-slate-200 transition-all"><X size={20} /></button>
+                  <button onClick={() => { setIsEditing(false); setPasswords({ newPassword: "", confirmPassword: "" }); }} className="p-4 bg-slate-100 text-slate-500 rounded-2xl hover:bg-slate-200 transition-all"><X size={20} /></button>
                 </div>
               ) : (
                 <button
@@ -201,29 +207,67 @@ const Profile = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-            <InputGroup label="Display Username" value={user.username} isEditing={isEditing} icon={<Fingerprint size={18} />} onChange={(v) => setUser({ ...user, username: v })} />
-            <InputGroup label="Merchant Name" value={user.full_name} isEditing={isEditing} icon={<UserIcon size={18} />} onChange={(v) => setUser({ ...user, full_name: v })} />
-            <InputGroup label="Business Email" value={user.email} isEditing={isEditing} icon={<Mail size={18} />} onChange={(v) => setUser({ ...user, email: v })} />
-            <InputGroup label="Contact Number" value={user.phone} isEditing={isEditing} icon={<Phone size={18} />} onChange={(v) => setUser({ ...user, phone: v })} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
+            <InputGroup label="Username" value={user.username} isEditing={isEditing} icon={<Fingerprint size={18} />} onChange={(v) => setUser({ ...user, username: v })} />
+            <InputGroup label="Full Name" value={user.full_name} isEditing={isEditing} icon={<UserIcon size={18} />} onChange={(v) => setUser({ ...user, full_name: v })} />
+            <InputGroup label="Email Address" value={user.email} isEditing={isEditing} icon={<Mail size={18} />} onChange={(v) => setUser({ ...user, email: v })} />
+            <InputGroup label="Phone Number" value={user.phone} isEditing={isEditing} icon={<Phone size={18} />} onChange={(v) => setUser({ ...user, phone: v })} />
           </div>
 
-          {/* THE STATS SECTION HAS BEEN REMOVED FROM HERE */}
+          {/* PASSWORD SECTION (Only visible when editing) */}
+          <AnimatePresence>
+            {isEditing && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="border-t border-slate-100 pt-8 mt-8"
+              >
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-orange-50 rounded-xl text-orange-500"><Key size={20} /></div>
+                  <h3 className="text-xl font-bold text-slate-800">Change Password</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                  <InputGroup
+                    label="New Password"
+                    value={passwords.newPassword}
+                    isEditing={true}
+                    icon={<Lock size={18} />}
+                    type="password"
+                    placeholder="Enter new password"
+                    onChange={(v) => setPasswords({ ...passwords, newPassword: v })}
+                  />
+                  <InputGroup
+                    label="Confirm Password"
+                    value={passwords.confirmPassword}
+                    isEditing={true}
+                    icon={<Check size={18} />}
+                    type="password"
+                    placeholder="Confirm new password"
+                    onChange={(v) => setPasswords({ ...passwords, confirmPassword: v })}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
         </div>
       </motion.div>
     </div>
   );
 };
 
-const InputGroup = ({ label, value, isEditing, icon, onChange }) => (
+const InputGroup = ({ label, value, isEditing, icon, onChange, type = "text", placeholder }) => (
   <div className="flex flex-col gap-2 group">
     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-orange-500">{label}</label>
     <div className={`flex items-center gap-4 px-6 py-5 rounded-2xl border transition-all ${isEditing ? 'bg-white border-orange-500 shadow-md ring-4 ring-orange-50' : 'bg-slate-50 border-slate-100 hover:border-orange-200'}`}>
       <span className={isEditing ? 'text-orange-500' : 'text-slate-400'}>{icon}</span>
       {isEditing ? (
         <input
-          className="bg-transparent w-full text-sm font-bold outline-none text-slate-800"
+          type={type}
+          className="bg-transparent w-full text-sm font-bold outline-none text-slate-800 placeholder-slate-300"
           value={value || ""}
+          placeholder={placeholder || ""}
           onChange={(e) => onChange(e.target.value)}
         />
       ) : (

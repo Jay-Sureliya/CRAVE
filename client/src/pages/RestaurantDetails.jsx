@@ -3,21 +3,16 @@ import { useParams, Link } from "react-router-dom";
 import api from "../services/api";
 import {
   ArrowLeft, Star, Clock, MapPin, Search, Plus, Minus,
-  ShoppingBag, ChevronRight, UtensilsCrossed, Leaf, Drumstick
+  ShoppingBag, ChevronRight, UtensilsCrossed, Leaf, Drumstick, Heart
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // --- HELPER: Fix Image URLs ---
 const getImageUrl = (path) => {
-  if (!path) return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80"; // Fallback
+  if (!path) return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
 
-  // Case 1: Base64 String (from database) -> Use as is
   if (path.startsWith("data:")) return path;
-
-  // Case 2: External URL (Unsplash, etc.) -> Use as is
   if (path.startsWith("http")) return path;
-
-  // Case 3: Local File Path (if you revert to file uploads later) -> Append backend URL
   return `http://localhost:8000${path}`;
 };
 
@@ -31,6 +26,7 @@ const RestaurantDetails = () => {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [cartItems, setCartItems] = useState({});
+  const [favorites, setFavorites] = useState({}); // New state for favorites
 
   useEffect(() => {
     const fetchData = async () => {
@@ -40,15 +36,19 @@ const RestaurantDetails = () => {
           api.get(`/api/menu/${id}`),
           api.get(`/restaurants/${id}`).catch(() => ({
             data: {
-              name: "Loading Restaurant...",
+              name: "Restaurant",
               rating: "4.5",
-              address: "Fetching details",
-              description: "Please wait while we load the restaurant info."
+              address: "Address unavailable",
+              description: "Delicious food awaits."
             }
           }))
         ]);
 
-        setMenuItems(menuRes.data);
+        const availableItems = Array.isArray(menuRes.data)
+          ? menuRes.data.filter(item => item.isAvailable === true)
+          : [];
+
+        setMenuItems(availableItems);
         setRestaurant(restRes.data);
       } catch (err) {
         console.error("Failed to fetch data:", err);
@@ -91,10 +91,17 @@ const RestaurantDetails = () => {
     });
   };
 
+  const toggleFavorite = (itemId) => {
+    setFavorites(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
+
   const totalItems = Object.values(cartItems).reduce((a, b) => a + b, 0);
   const cartTotalValue = Object.keys(cartItems).reduce((acc, itemId) => {
     const item = menuItems.find(i => i.id === parseInt(itemId));
-    const price = item?.discount_price || item?.price || 0;
+    const price = item?.discountPrice || item?.discount_price || item?.price || 0;
     return acc + (price * cartItems[itemId]);
   }, 0);
 
@@ -131,14 +138,14 @@ const RestaurantDetails = () => {
 
             <div className="flex items-center gap-2 text-sm font-bold text-stone-700 bg-orange-50 p-3 rounded-xl border border-orange-100">
               <Star size={16} className="text-orange-500 fill-orange-500" />
-              <span>{restaurant?.rating}</span>
+              <span>{restaurant?.rating || "New"}</span>
               <span className="text-stone-300">|</span>
               <Clock size={16} className="text-orange-500" />
               <span>25 min</span>
             </div>
           </div>
 
-          <div className="hidden lg:flex flex-col bg-white p-2 rounded-[2rem] shadow-lg border border-orange-50 h-full overflow-y-auto custom-scrollbar">
+          <div className="hidden lg:flex flex-col bg-white p-2 rounded-[2rem] shadow-lg border border-orange-50 h-full overflow-y-auto no-scrollbar">
             <h3 className="px-4 py-3 text-xs font-bold text-stone-400 uppercase tracking-widest">Menu Sections</h3>
             {categories.map(cat => (
               <button
@@ -167,7 +174,7 @@ const RestaurantDetails = () => {
                 <Search className="ml-3 text-orange-400" size={20} />
                 <input
                   type="text"
-                  placeholder={`Search in ${restaurant?.name}...`}
+                  placeholder={`Search in ${restaurant?.name || "menu"}...`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full bg-transparent p-3 outline-none text-stone-700 placeholder-stone-400 font-medium"
@@ -209,7 +216,9 @@ const RestaurantDetails = () => {
                     key={item.id}
                     item={item}
                     qty={cartItems[item.id] || 0}
+                    isFav={favorites[item.id] || false}
                     onUpdate={(d) => updateQty(item.id, d)}
+                    onFav={() => toggleFavorite(item.id)}
                   />
                 ))}
               </div>
@@ -250,12 +259,24 @@ const RestaurantDetails = () => {
   );
 };
 
-const MenuCard = ({ item, qty, onUpdate }) => {
-  const hasDiscount = item.discount_price && item.discount_price < item.price;
-  const discountPercent = hasDiscount ? Math.round(((item.price - item.discount_price) / item.price) * 100) : 0;
+const MenuCard = ({ item, qty, onUpdate, isFav, onFav }) => {
+  const dPrice = item.discountPrice || item.discount_price;
+  const hasDiscount = dPrice && dPrice < item.price;
+  const discountPercent = hasDiscount ? Math.round(((item.price - dPrice) / item.price) * 100) : 0;
 
   return (
-    <div className="group bg-white rounded-[1.5rem] p-4 shadow-sm hover:shadow-xl hover:shadow-orange-100/50 border border-transparent hover:border-orange-100 transition-all duration-300 flex flex-col">
+    <div className="group bg-white rounded-[1.5rem] p-4 shadow-sm hover:shadow-xl hover:shadow-orange-100/50 border border-transparent hover:border-orange-100 transition-all duration-300 flex flex-col relative">
+
+      {/* Favourite Button (Top Right) */}
+      <button
+        onClick={onFav}
+        className="absolute top-4 right-4 z-20 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:scale-110 transition-transform active:scale-95"
+      >
+        <Heart
+          size={18}
+          className={`transition-colors ${isFav ? "fill-red-500 text-red-500" : "text-stone-400 hover:text-red-500"}`}
+        />
+      </button>
 
       <div className="flex gap-4">
         {/* Image Section */}
@@ -266,7 +287,7 @@ const MenuCard = ({ item, qty, onUpdate }) => {
             className="w-full h-full object-cover rounded-2xl group-hover:scale-105 transition-transform duration-500"
           />
           <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-md p-1.5 rounded-lg shadow-sm border border-stone-100">
-            {item.is_veg ? (
+            {item.type === 'veg' || item.is_veg ? (
               <Leaf size={14} className="text-green-600 fill-green-100" />
             ) : (
               <Drumstick size={14} className="text-red-600 fill-red-100" />
@@ -282,7 +303,7 @@ const MenuCard = ({ item, qty, onUpdate }) => {
 
         {/* Content Section */}
         <div className="flex flex-col flex-1 min-w-0">
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start pr-8"> {/* Added pr-8 to avoid overlap with fav button */}
             <h3 className="text-lg font-bold text-stone-800 leading-snug group-hover:text-orange-600 transition-colors line-clamp-2">
               {item.name}
             </h3>
@@ -298,7 +319,7 @@ const MenuCard = ({ item, qty, onUpdate }) => {
                 <span className="text-stone-400 text-xs line-through font-medium">₹{item.price}</span>
               )}
               <span className="text-lg font-black text-stone-900">
-                ₹{hasDiscount ? item.discount_price : item.price}
+                ₹{hasDiscount ? dPrice : item.price}
               </span>
             </div>
 
