@@ -147,40 +147,36 @@ def format_items(items):
         for item in items
     ]
 
-# ---------------- RESTAURANT REGISTRATION LOGIC ----------------
+# ---------------- RESTAURANT REGISTRATION LOGIC (UPDATED) ----------------
 
 @app.post("/api/restaurant-request")
 def submit_restaurant_request(request: RestaurantRequestCreate, db: Session = Depends(get_db)):
+    # 1. Check if a request already exists
     if db.query(RestaurantRequest).filter(RestaurantRequest.email == request.email).first():
-        raise HTTPException(status_code=400, detail="Email already exists.")
+        raise HTTPException(status_code=400, detail="Application with this email already exists.")
 
+    # 2. Check if the restaurant is already active
     if db.query(Restaurant).filter(Restaurant.email == request.email).first():
-        raise HTTPException(status_code=400, detail="Restaurant already active.")
+        raise HTTPException(status_code=400, detail="Restaurant is already active.")
 
+    # 3. Create the Request with 'pending' status
     new_request = RestaurantRequest(
         restaurant_name=request.restaurantName,
         owner_name=request.ownerName,
         email=request.email,
         phone=request.phone,
         address=request.address,
-        status="approved"
+        status="pending"  # <--- CHANGED FROM "approved" TO "pending"
     )
     db.add(new_request)
-
-    hashed_default_pass = hash_password("123456") 
-    
-    new_restaurant = Restaurant(
-        name=request.restaurantName,
-        email=request.email,
-        password=hashed_default_pass,
-        address=request.address,
-        is_active=True 
-    )
-    db.add(new_restaurant)
     db.commit()
-    db.refresh(new_restaurant)
+    db.refresh(new_request)
 
-    return {"message": "Auto-Approved!", "id": new_restaurant.id}
+    # 4. Return success message (User/Restaurant is NOT created yet)
+    return {
+        "message": "Application submitted successfully! Please wait for Admin approval.", 
+        "id": new_request.id
+    }
 
 # ==============================================================================
 #  RESTAURANT LIST API (OPTIMIZED & DYNAMIC)
