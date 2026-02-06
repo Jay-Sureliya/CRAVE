@@ -1,25 +1,25 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 
-# Base Schema
+# Base Schema (Shared Fields)
 class MenuItemBase(BaseModel):
     name: str
     category: str
     description: Optional[str] = None
     price: float
-    discount_price: Optional[float] = None
+    # Auto-map snake_case to camelCase for Frontend
+    discount_price: Optional[float] = Field(None, serialization_alias="discountPrice")
     is_veg: bool = True
-    is_available: bool = True
+    is_available: bool = Field(True, serialization_alias="isAvailable")
 
-# Schema for creating (Image is handled separately via Form)
-class MenuItemCreate(MenuItemBase):
-    pass
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-# Schema for reading (Response)
-class MenuItemResponse(MenuItemBase):
+# 1. LITE Schema (For Fast Lists - NO IMAGE)
+class MenuItemLite(MenuItemBase):
     id: int
     restaurant_id: int
-    image: Optional[str] = None # Base64 string
+    # NO IMAGE FIELD HERE
 
-    class Config:
-        from_attributes = True # Use 'orm_mode = True' if using Pydantic v1
+# 2. FULL Schema (For Details/Updates - WITH IMAGE)
+class MenuItemResponse(MenuItemLite):
+    image: Optional[str] = None

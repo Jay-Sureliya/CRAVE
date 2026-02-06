@@ -4,6 +4,16 @@ import {
     Tag, UploadCloud, Eye, EyeOff, Check, Save, Loader2, Search
 } from "lucide-react";
 
+// --- HELPER: Lazy Load Images ---
+const getImageUrl = (item) => {
+    if (!item) return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
+    if (typeof item === 'string' && item.startsWith('blob:')) return item;
+    if (item.image && (item.image.startsWith("data:") || item.image.startsWith("http"))) {
+        return item.image;
+    }
+    return `http://localhost:8000/api/menu/image/${item.id}`;
+};
+
 const RestaurantMenu = () => {
     const [showModal, setShowModal] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -17,7 +27,6 @@ const RestaurantMenu = () => {
     const [dbCategories, setDbCategories] = useState([]);
     const [menuItems, setMenuItems] = useState([]);
 
-    // Form State
     const initialFormState = {
         name: "",
         category: "",
@@ -31,10 +40,8 @@ const RestaurantMenu = () => {
     const [newItem, setNewItem] = useState(initialFormState);
     const [previewImage, setPreviewImage] = useState(null);
 
-    // --- HELPER: GET AUTH HEADERS & ID ---
     const getAuthData = () => {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-        // We try to get restaurant_id from session, if not there, we hope the backend extracts it
         const resId = sessionStorage.getItem("restaurant_id") || localStorage.getItem("restaurant_id");
         return {
             headers: token ? { "Authorization": `Bearer ${token}` } : {},
@@ -42,18 +49,15 @@ const RestaurantMenu = () => {
         };
     };
 
-    // --- FETCH DATA ---
     const fetchData = async () => {
         try {
             setIsLoading(true);
             const { headers } = getAuthData();
 
-            // Fetch Categories
             const catRes = await fetch("http://localhost:8000/api/categories", { headers });
             const catData = await catRes.json();
             setDbCategories(Array.isArray(catData) ? catData : []);
 
-            // Fetch Menu Items
             const menuRes = await fetch("http://localhost:8000/api/menu", { headers });
             const menuData = await menuRes.json();
             setMenuItems(Array.isArray(menuData) ? menuData : []);
@@ -68,7 +72,6 @@ const RestaurantMenu = () => {
         fetchData();
     }, []);
 
-    // --- HANDLERS ---
     const handleAddNew = () => {
         setNewItem(initialFormState);
         setPreviewImage(null);
@@ -83,13 +86,16 @@ const RestaurantMenu = () => {
             category: item.category,
             description: item.description || "",
             price: item.price,
-            // Ensure we catch discount_price from backend and map to discountPrice for form
             discountPrice: item.discountPrice !== undefined ? item.discountPrice : (item.discount_price || ""),
-            type: item.type === "veg" ? "veg" : "non-veg",
+
+            // --- FIX 1: Map boolean 'is_veg' to string 'veg'/'non-veg' for the form ---
+            type: item.is_veg ? "veg" : "non-veg",
+
             isAvailable: item.isAvailable,
             image: null
         });
-        setPreviewImage(item.image);
+
+        setPreviewImage(getImageUrl(item));
         setIsEditing(true);
         setEditId(item.id);
         setShowModal(true);
@@ -114,7 +120,6 @@ const RestaurantMenu = () => {
         setShowSuggestions(false);
     };
 
-    // --- SUBMIT LOGIC (CRITICAL FIXES HERE) ---
     const handleSubmit = async (e) => {
         e.preventDefault();
         const { headers, restaurantId } = getAuthData();
@@ -125,7 +130,6 @@ const RestaurantMenu = () => {
         formData.append("description", newItem.description);
         formData.append("price", newItem.price);
 
-        // FIX 1: Send discountPrice even if it is 0
         if (newItem.discountPrice !== "" && newItem.discountPrice !== null) {
             formData.append("discountPrice", newItem.discountPrice);
         }
@@ -133,7 +137,6 @@ const RestaurantMenu = () => {
         formData.append("type", newItem.type);
         formData.append("isAvailable", newItem.isAvailable.toString());
 
-        // FIX 2: Manually send Restaurant ID to ensure main.py receives it
         if (restaurantId) {
             formData.append("restaurant_id", restaurantId);
         }
@@ -151,13 +154,13 @@ const RestaurantMenu = () => {
 
             const response = await fetch(url, {
                 method: method,
-                headers: headers, // Send Auth Header
+                headers: headers,
                 body: formData
             });
 
             if (response.ok) {
                 setShowModal(false);
-                fetchData(); // Refresh Data
+                fetchData();
             } else {
                 const err = await response.json();
                 alert("Failed: " + (err.detail || "Check console"));
@@ -184,7 +187,6 @@ const RestaurantMenu = () => {
 
     const toggleStatus = async (item) => {
         const updatedStatus = !item.isAvailable;
-        // Optimistic Update
         setMenuItems(menuItems.map(i => i.id === item.id ? { ...i, isAvailable: updatedStatus } : i));
 
         try {
@@ -199,11 +201,10 @@ const RestaurantMenu = () => {
             });
         } catch (error) {
             console.error("Error updating status:", error);
-            fetchData(); // Revert on fail
+            fetchData();
         }
     };
 
-    // Filter Logic
     const filteredItems = menuItems.filter(item =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.category.toLowerCase().includes(searchTerm.toLowerCase())
@@ -236,15 +237,27 @@ const RestaurantMenu = () => {
                 {filteredItems.map((item) => (
                     <div key={item.id} className={`group bg-white rounded-[2rem] p-4 border transition-all hover:shadow-xl ${!item.isAvailable ? 'opacity-75 bg-slate-50' : 'border-white'}`}>
                         <div className="h-48 bg-slate-100 rounded-[1.5rem] relative overflow-hidden mb-5">
-                            {item.image ? (
-                                <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageIcon size={40} /></div>
-                            )}
+                            {/* FAST IMAGE LOADING */}
+                            <img
+                                src={getImageUrl(item)}
+                                alt={item.name}
+                                loading="lazy"
+                                onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                }}
+                                className="w-full h-full object-cover transition-opacity duration-300"
+                            />
+                            <div className="absolute inset-0 hidden items-center justify-center text-slate-300 bg-slate-100">
+                                <ImageIcon size={40} />
+                            </div>
+
                             <div className="absolute top-4 left-4 flex gap-2">
-                                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black backdrop-blur-md shadow-sm flex items-center gap-1.5 ${item.type === 'veg' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
-                                    {item.type === 'veg' ? <Leaf size={10} fill="currentColor" /> : <Drumstick size={10} fill="currentColor" />}
-                                    {item.type === 'veg' ? 'VEG' : 'NON'}
+                                {/* --- FIX 2: Use item.is_veg (boolean) instead of item.type (string) --- */}
+                                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black backdrop-blur-md shadow-sm flex items-center gap-1.5 ${item.is_veg ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                                    {item.is_veg ? <Leaf size={10} fill="currentColor" /> : <Drumstick size={10} fill="currentColor" />}
+                                    {item.is_veg ? 'VEG' : 'NON'}
                                 </span>
                             </div>
                             {!item.isAvailable && (
@@ -258,7 +271,6 @@ const RestaurantMenu = () => {
                                 <span className="text-[10px] font-black text-orange-500 uppercase bg-orange-50 px-2 py-1 rounded-md">{item.category}</span>
                                 <div className="text-right">
                                     <span className="block text-lg font-black text-slate-800">₹{item.price}</span>
-                                    {/* Handle Snake Case or Camel Case from DB */}
                                     {(item.discountPrice || item.discount_price) && <span className="block text-xs font-bold text-slate-400 line-through">₹{item.discountPrice || item.discount_price}</span>}
                                 </div>
                             </div>
@@ -286,8 +298,11 @@ const RestaurantMenu = () => {
                         </div>
                         <div className="p-8 grid grid-cols-1 md:grid-cols-12 gap-10">
                             <div className="md:col-span-5 space-y-6">
-                                <label className="border-2 border-dashed rounded-3xl h-60 flex flex-col items-center justify-center cursor-pointer relative bg-slate-50 hover:bg-slate-100">
-                                    {previewImage ? <img src={previewImage} className="w-full h-full object-cover rounded-3xl" /> : <div className="flex flex-col items-center"><UploadCloud className="text-orange-500 mb-2" size={32} /><span className="text-sm font-bold text-slate-500">Upload Image</span></div>}
+                                <label className="border-2 border-dashed rounded-3xl h-60 flex flex-col items-center justify-center cursor-pointer relative bg-slate-50 hover:bg-slate-100 overflow-hidden">
+                                    {previewImage ?
+                                        <img src={previewImage} className="w-full h-full object-cover" alt="Preview" /> :
+                                        <div className="flex flex-col items-center"><UploadCloud className="text-orange-500 mb-2" size={32} /><span className="text-sm font-bold text-slate-500">Upload Image</span></div>
+                                    }
                                     <input type="file" onChange={handleFileChange} accept="image/*" className="hidden" />
                                 </label>
                                 <div className="flex gap-2">

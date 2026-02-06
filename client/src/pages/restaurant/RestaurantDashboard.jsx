@@ -28,7 +28,6 @@ const RestaurantDashboard = () => {
         profile_image: null
     });
 
-    // Form State
     const [formData, setFormData] = useState({
         username: "",
         name: "",
@@ -41,6 +40,40 @@ const RestaurantDashboard = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [imageError, setImageError] = useState(false);
+
+    // --- HELPER: Logic to handle image URLs safely ---
+    const formatImageUrl = (url) => {
+        if (!url) return null;
+        // If it's a Base64 string, return as is (no timestamp allowed here)
+        if (url.startsWith("data:image")) return url;
+        // If it's a URL, add timestamp to prevent cache issues
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}t=${new Date().getTime()}`;
+    };
+
+    // --- IMAGE COMPRESSION ---
+    const compressImage = (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    const MAX_WIDTH = 800;
+                    const scaleSize = MAX_WIDTH / img.width;
+                    canvas.width = MAX_WIDTH;
+                    canvas.height = img.height * scaleSize;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob((blob) => {
+                        resolve(new File([blob], file.name, { type: "image/jpeg" }));
+                    }, "image/jpeg", 0.7);
+                };
+            };
+        });
+    };
 
     // --- FETCH DATA ---
     useEffect(() => {
@@ -56,7 +89,6 @@ const RestaurantDashboard = () => {
 
                 if (response.ok) {
                     const data = await response.json();
-
                     if (data.id) sessionStorage.setItem("restaurant_id", data.id);
 
                     setUserData({
@@ -67,7 +99,7 @@ const RestaurantDashboard = () => {
                         address: data.address || "",
                         role: "restaurant",
                         is_active: data.is_active,
-                        profile_image: data.profile_image
+                        profile_image: formatImageUrl(data.profile_image)
                     });
                 }
             } catch (error) {
@@ -75,7 +107,7 @@ const RestaurantDashboard = () => {
             }
         };
         fetchProfile();
-    }, []);
+    }, [activeTab]);
 
     const handleLogout = () => {
         sessionStorage.clear();
@@ -83,7 +115,6 @@ const RestaurantDashboard = () => {
         navigate("/login");
     };
 
-    // --- MODAL LOGIC ---
     const openEditModal = () => {
         setFormData({
             username: userData.username,
@@ -103,18 +134,17 @@ const RestaurantDashboard = () => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleFileChange = (e) => {
+    const handleFileChange = async (e) => {
         const file = e.target.files[0];
         if (file) {
-            setSelectedFile(file);
-            setImagePreview(URL.createObjectURL(file));
+            const compressed = await compressImage(file);
+            setSelectedFile(compressed);
+            setImagePreview(URL.createObjectURL(compressed));
         }
     };
 
-    // --- SAVE PROFILE ---
     const handleSaveProfile = async (e) => {
         e.preventDefault();
-
         if (formData.password && formData.password !== formData.confirmPassword) {
             alert("Passwords do not match!");
             return;
@@ -124,7 +154,6 @@ const RestaurantDashboard = () => {
         data.append("name", formData.name);
         data.append("email", formData.email);
         data.append("address", formData.address);
-        // Only append if changed/exists
         if (formData.username && formData.username !== userData.username) data.append("username", formData.username);
         if (formData.password) data.append("password", formData.password);
         if (selectedFile) data.append("profile_image", selectedFile);
@@ -139,18 +168,15 @@ const RestaurantDashboard = () => {
 
             if (response.ok) {
                 const updatedUser = await response.json();
-
-                // 1. Reset error state so new image can load
                 setImageError(false);
 
-                // 2. Update State IMMEDIATELY with data from Backend
                 setUserData(prev => ({
-                    ...prev, // Keep ID, role, etc.
+                    ...prev,
                     username: updatedUser.username,
                     name: updatedUser.name,
                     email: updatedUser.email,
                     address: updatedUser.address,
-                    profile_image: updatedUser.profile_image // This forces the image to update in UI
+                    profile_image: formatImageUrl(updatedUser.profile_image)
                 }));
 
                 alert("Profile updated successfully!");
@@ -177,8 +203,6 @@ const RestaurantDashboard = () => {
             `}</style>
 
             <div className="flex h-screen w-screen bg-orange-50/30 text-slate-800 font-sans overflow-hidden relative selection:bg-orange-200">
-
-                {/* SIDEBAR */}
                 <aside className="w-72 bg-white/80 backdrop-blur-md border-r border-orange-100/50 flex flex-col h-full z-30 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.05)]">
                     <div className="h-20 flex-none flex items-center px-8 border-b border-orange-50">
                         <div className="flex items-center gap-3 text-orange-600">
@@ -219,13 +243,10 @@ const RestaurantDashboard = () => {
                     </div>
                 </aside>
 
-                {/* MAIN CONTENT */}
                 <div className="flex-1 flex flex-col h-full min-w-0 bg-[#FFFBF7]">
                     <main className="flex-1 p-8 overflow-y-scroll no-scrollbar">
                         {activeTab === "profile" && (
                             <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
-
-                                {/* HERO CARD */}
                                 <div className="relative overflow-hidden bg-white rounded-3xl border border-orange-100 p-8 flex items-center gap-8 shadow-xl shadow-orange-500/5">
                                     <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-orange-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
                                     <div className="relative w-28 h-28 rounded-full p-1 shadow-lg shadow-orange-200 bg-white">
@@ -257,8 +278,6 @@ const RestaurantDashboard = () => {
                                         Edit Profile
                                     </button>
                                 </div>
-
-                                {/* DETAILS GRID */}
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                     <div className="bg-white rounded-3xl border border-orange-100 shadow-lg shadow-orange-500/5 overflow-hidden">
                                         <div className="px-8 py-6 border-b border-orange-50 bg-gradient-to-r from-white to-orange-50/30">
@@ -290,12 +309,9 @@ const RestaurantDashboard = () => {
                     </main>
                 </div>
 
-                {/* --- EDIT MODAL --- */}
                 {isEditModalOpen && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
                         <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl shadow-orange-900/20 border border-white/50 flex flex-col max-h-[85vh] animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-
-                            {/* Header */}
                             <div className="flex-none flex justify-between items-center px-8 py-5 border-b border-orange-50 bg-gradient-to-r from-orange-50/50 to-white backdrop-blur-md rounded-t-3xl">
                                 <div>
                                     <h3 className="text-xl font-bold text-gray-900">Edit Profile</h3>
@@ -305,11 +321,8 @@ const RestaurantDashboard = () => {
                                     <X size={20} />
                                 </button>
                             </div>
-
-                            {/* Body */}
                             <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                                 <form id="profileForm" onSubmit={handleSaveProfile} className="space-y-5">
-                                    {/* Image Upload */}
                                     <div className="flex flex-col items-center justify-center mb-6">
                                         <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
                                             <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-orange-50">
@@ -325,36 +338,28 @@ const RestaurantDashboard = () => {
                                         </div>
                                         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
                                     </div>
-
-                                    {/* Inputs */}
                                     <FormInput icon={UserCircle} label="Login Username" name="username" value={formData.username} onChange={handleInputChange} type="text" />
                                     <FormInput icon={Home} label="Restaurant Name" name="name" value={formData.name} onChange={handleInputChange} type="text" />
                                     <FormInput icon={Mail} label="Email Address" name="email" value={formData.email} onChange={handleInputChange} type="email" />
-
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                             <MapPin size={14} className="text-orange-500" /> Business Address
                                         </label>
                                         <textarea name="address" value={formData.address} onChange={handleInputChange} rows="2" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm font-medium resize-none text-gray-700" />
                                     </div>
-
                                     <div className="border-t border-dashed border-gray-200 my-2"></div>
-
                                     <div className="grid grid-cols-2 gap-4">
                                         <FormInput icon={Lock} label="New Password" name="password" value={formData.password} onChange={handleInputChange} type="password" placeholder="Optional" />
                                         <FormInput label="Confirm" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} type="password" placeholder="Confirm" />
                                     </div>
                                 </form>
                             </div>
-
-                            {/* Footer */}
                             <div className="flex-none p-6 border-t border-gray-100 bg-white rounded-b-3xl">
                                 <div className="flex gap-3">
                                     <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-all text-sm">Cancel</button>
                                     <button type="submit" form="profileForm" className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-orange-500/30 hover:-translate-y-0.5 transition-all text-sm flex items-center justify-center gap-2"><Save size={18} /> Save Changes</button>
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 )}
@@ -363,7 +368,7 @@ const RestaurantDashboard = () => {
     );
 };
 
-// --- HELPERS ---
+// --- HELPERS (Same as your original code) ---
 const NavItem = ({ icon, label, isActive, onClick, count }) => (
     <button onClick={onClick} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-200 group relative ${isActive ? "bg-orange-50 text-orange-700 font-bold shadow-sm" : "text-gray-500 hover:bg-white hover:text-orange-600 hover:shadow-sm font-medium"}`}>
         <div className="flex items-center gap-4 relative z-10">

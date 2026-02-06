@@ -1,176 +1,171 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Response
+from fastapi.concurrency import run_in_threadpool 
+from sqlalchemy.orm import Session, defer
 from sqlalchemy import text
 from typing import List, Optional
 import base64
+import io
+import os # <--- ADDED
+from dotenv import load_dotenv # <--- ADDED
+from PIL import Image 
 from jose import jwt, JWTError
 
 from app.db.session import get_db
 from app.models.menu import MenuItem
-from app.models.user import Restaurant # Import Restaurant model
-from app.schemas.menu import MenuItemResponse
+from app.models.user import Restaurant
+from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel, ConfigDict, Field
 
 # --- CONFIG ---
-SECRET_KEY = "your_secret_key_here" 
+load_dotenv() # <--- LOAD ENV VARIABLES
+# Now uses the same key as main.py
+SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key_here") 
 ALGORITHM = "HS256"
-from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 router = APIRouter()
 
-# --- DEPENDENCY: Get Logged-in Restaurant ---
+# --- HELPER: Compress Image ---
+def compress_image(image_file: UploadFile, max_size=(800, 800), quality=70) -> str:
+    try:
+        img = Image.open(image_file.file)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.thumbnail(max_size)
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=quality, optimize=True)
+        buffer.seek(0)
+        encoded = base64.b64encode(buffer.read()).decode("utf-8")
+        return f"data:image/jpeg;base64,{encoded}"
+    except Exception as e:
+        print(f"Error compressing image: {e}")
+        return None
+
+# --- DEPENDENCY ---
 def get_current_restaurant(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
+        # This will now succeed because the SECRET_KEY matches!
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("role") != "restaurant":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        
+        if payload.get("role") != "restaurant": raise HTTPException(403, "Not authorized")
         res_id = payload.get("restaurant_id")
-        if not res_id:
-            raise HTTPException(status_code=404, detail="Restaurant ID not found in token")
-        
+        if not res_id: raise HTTPException(404, "Restaurant ID not found")
         restaurant = db.query(Restaurant).filter(Restaurant.id == res_id).first()
-        if not restaurant:
-            raise HTTPException(status_code=404, detail="Restaurant not found")
+        if not restaurant: raise HTTPException(404, "Restaurant not found")
         return restaurant
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid session")
+        raise HTTPException(401, "Invalid session")
+
+# ======================= SCHEMAS =======================
+class MenuItemLite(BaseModel):
+    id: int
+    name: str
+    category: str
+    description: Optional[str] = None
+    price: float
+    
+    # CamelCase conversion
+    discount_price: Optional[float] = Field(None, serialization_alias="discountPrice")
+    is_veg: bool = True
+    is_available: bool = Field(True, serialization_alias="isAvailable") 
+    
+    # NO IMAGE (Speed Optimization)
+    model_config = ConfigDict(from_attributes=True)
 
 # ======================= ROUTES =======================
 
-# 1. GET Menu Items
-@router.get("/api/menu")
-def get_menu(
+# 1. GET Public Menu (For Customer Frontend - No Token Needed)
+@router.get("/api/public/menu/{restaurant_id}", response_model=List[MenuItemLite])
+def get_public_menu(restaurant_id: int, db: Session = Depends(get_db)):
+    return db.query(MenuItem).filter(
+        MenuItem.restaurant_id == restaurant_id
+    ).options(defer(MenuItem.image)).all()
+
+# 2. GET Menu Item Image (Public - Lazy Load)
+@router.get("/api/menu/image/{item_id}")
+def get_menu_item_image(item_id: int, db: Session = Depends(get_db)):
+    item = db.query(MenuItem).filter(MenuItem.id == item_id).first()
+    
+    if not item or not item.image:
+        return Response(status_code=404)
+
+    try:
+        img_str = item.image
+        if "base64," in img_str:
+            _, img_str = img_str.split("base64,", 1)
+        image_data = base64.b64decode(img_str)
+        return Response(content=image_data, media_type="image/jpeg")
+    except Exception:
+        return Response(status_code=500)
+
+# 3. GET My Menu (For Restaurant Dashboard - REQUIRES TOKEN)
+@router.get("/api/menu", response_model=List[MenuItemLite])
+def get_my_menu(
     db: Session = Depends(get_db),
     current_restaurant: Restaurant = Depends(get_current_restaurant)
 ):
-    items = db.query(MenuItem).filter(MenuItem.restaurant_id == current_restaurant.id).all()
-    return [
-        {
-            "id": i.id,
-            "name": i.name,
-            "category": i.category,
-            "description": i.description,
-            "price": i.price,
-            "discountPrice": i.discount_price, # Send as camelCase for frontend
-            "type": "veg" if i.is_veg else "non-veg",
-            "isAvailable": i.is_available,
-            "image": i.image
-        }
-        for i in items
-    ]
+    return db.query(MenuItem).filter(MenuItem.restaurant_id == current_restaurant.id).options(defer(MenuItem.image)).all()
 
-# 2. ADD Menu Item
+# 4. ADD Item
 @router.post("/api/menu")
 async def add_menu_item(
-    name: str = Form(...),
-    category: str = Form(...),
-    description: str = Form(""),
-    price: float = Form(...),
-    # FIX: Accept "discountPrice" (camelCase) from frontend FormData
-    discountPrice: Optional[float] = Form(None), 
-    type: str = Form(...),
-    isAvailable: str = Form(...),
+    name: str = Form(...), category: str = Form(...), description: str = Form(""),
+    price: float = Form(...), discountPrice: Optional[float] = Form(None), 
+    type: str = Form(...), isAvailable: str = Form(...), 
     image: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db),
-    # FIX: Ensure we get the logged-in restaurant
-    current_restaurant: Restaurant = Depends(get_current_restaurant) 
+    db: Session = Depends(get_db), current_restaurant: Restaurant = Depends(get_current_restaurant) 
 ):
-    # Handle Image
     image_data = None
     if image:
-        contents = await image.read()
-        encoded = base64.b64encode(contents).decode("utf-8")
-        image_data = f"data:{image.content_type};base64,{encoded}"
+        image_data = await run_in_threadpool(compress_image, image)
 
     new_item = MenuItem(
-        restaurant_id=current_restaurant.id, # <--- FORCED SAVE ID
-        name=name,
-        category=category,
-        description=description,
-        price=price,
-        discount_price=discountPrice, # <--- Mapped from camelCase input
-        is_veg=(type.lower() == "veg"),
-        is_available=(isAvailable.lower() == "true"),
-        image=image_data
+        restaurant_id=current_restaurant.id, name=name, category=category, description=description,
+        price=price, discount_price=discountPrice, is_veg=(type.lower() == "veg"),
+        is_available=(isAvailable.lower() == "true"), image=image_data 
     )
-    
     db.add(new_item)
     db.commit()
     db.refresh(new_item)
     return {"message": "Item added", "id": new_item.id}
 
-# 3. UPDATE Menu Item
+# 5. UPDATE Item
 @router.put("/api/menu/{item_id}")
 async def update_menu_item(
-    item_id: int,
-    name: Optional[str] = Form(None),
-    category: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    price: Optional[float] = Form(None),
-    discountPrice: Optional[float] = Form(None),
-    type: Optional[str] = Form(None),
-    isAvailable: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db),
-    current_restaurant: Restaurant = Depends(get_current_restaurant)
+    item_id: int, name: Optional[str] = Form(None), category: Optional[str] = Form(None),
+    description: Optional[str] = Form(None), price: Optional[float] = Form(None),
+    discountPrice: Optional[float] = Form(None), type: Optional[str] = Form(None),
+    isAvailable: Optional[str] = Form(None), image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db), current_restaurant: Restaurant = Depends(get_current_restaurant)
 ):
-    item = db.query(MenuItem).filter(
-        MenuItem.id == item_id, 
-        MenuItem.restaurant_id == current_restaurant.id
-    ).first()
-    
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    item = db.query(MenuItem).filter(MenuItem.id == item_id, MenuItem.restaurant_id == current_restaurant.id).first()
+    if not item: raise HTTPException(404, "Item not found")
 
     if name: item.name = name
     if category: item.category = category
     if description: item.description = description
     if price is not None: item.price = price
-    
-    # Save Discount Price
-    if discountPrice is not None: 
-        item.discount_price = discountPrice
-
+    if discountPrice is not None: item.discount_price = discountPrice
     if type: item.is_veg = (type == "veg")
     if isAvailable is not None: item.is_available = (isAvailable.lower() == 'true')
-
-    if image:
-        contents = await image.read()
-        encoded = base64.b64encode(contents).decode("utf-8")
-        item.image = f"data:{image.content_type};base64,{encoded}"
+    if image: item.image = await run_in_threadpool(compress_image, image)
 
     db.commit()
     return {"message": "Updated successfully"}
 
-# 4. DELETE Menu Item
+# 6. DELETE Item
 @router.delete("/api/menu/{item_id}")
-def delete_menu_item(
-    item_id: int,
-    db: Session = Depends(get_db),
-    current_restaurant: Restaurant = Depends(get_current_restaurant)
-):
-    item = db.query(MenuItem).filter(
-        MenuItem.id == item_id, 
-        MenuItem.restaurant_id == current_restaurant.id
-    ).first()
-    
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-        
+def delete_menu_item(item_id: int, db: Session = Depends(get_db), current_restaurant: Restaurant = Depends(get_current_restaurant)):
+    item = db.query(MenuItem).filter(MenuItem.id == item_id, MenuItem.restaurant_id == current_restaurant.id).first()
+    if not item: raise HTTPException(404, "Item not found")
     db.delete(item)
     db.commit()
     return {"message": "Deleted successfully"}
 
-# 5. GET Categories
+# 7. GET Categories (For Dashboard - REQUIRES TOKEN)
 @router.get("/api/categories", response_model=List[str])
-def get_categories(
-    db: Session = Depends(get_db),
-    current_restaurant: Restaurant = Depends(get_current_restaurant)
-):
+def get_categories(db: Session = Depends(get_db), current_restaurant: Restaurant = Depends(get_current_restaurant)):
     try:
         sql = text("SELECT DISTINCT category FROM menu_items WHERE restaurant_id = :rid AND category IS NOT NULL")
         result = db.execute(sql, {"rid": current_restaurant.id})
         return [row[0] for row in result]
-    except Exception:
-        return []
+    except: return []
