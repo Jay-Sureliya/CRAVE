@@ -14,6 +14,7 @@ import Profile from "./pages/Profile.jsx";
 import RestaurantsList from "./pages/RestaurantsList.jsx";
 import RestaurantDetails from "./pages/RestaurantDetails.jsx";
 import RiderDashboard from "./pages/RiderDashboard.jsx";
+import FoodItemDetails from "./pages/FoodItemDetails.jsx";
 
 // --- PLACEHOLDERS ---
 const OrderFood = () => <div className="p-20 text-center text-2xl">🍔 Customer Menu (Order Now Page)</div>;
@@ -46,6 +47,7 @@ function App() {
           {/* Public Restaurant Listing */}
           <Route path="/rest" element={<RestaurantsList />} />
           <Route path="/rest/:id" element={<RestaurantDetails />} />
+          <Route path="/menu-item/:id" element={<FoodItemDetails />} /> {/* Add this line */}
 
           <Route path="/track-order" element={<TrackOrder />} />
           <Route path="/order-food" element={<OrderFood />} />
