@@ -1,5 +1,5 @@
 import React from 'react';
-import a1 from "../../public/a1.png"
+import a1 from "/a1.png"
 
 const Ad = () => {
     return (

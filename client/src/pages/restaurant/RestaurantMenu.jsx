@@ -1,625 +1,348 @@
-// import { useState, useEffect } from "react";
-// import {
-//     Upload,
-//     IndianRupee,
-//     Leaf,
-//     Drumstick,
-//     Tag,
-//     Type,
-//     FileText,
-//     Loader2,
-//     ImagePlus,
-//     X,
-//     Sparkles
-// } from "lucide-react";
-// import api from "../../services/api";
-
-// const RestaurantMenu = () => {
-//     const [loading, setLoading] = useState(false);
-//     const [imagePreview, setImagePreview] = useState(null);
-
-//     const [formData, setFormData] = useState({
-//         name: "",
-//         description: "",
-//         originalPrice: "",
-//         discountPrice: "",
-//         isVeg: true,
-//         category: "",
-//         imageFile: null
-//     });
-
-//     const handleChange = (e) => {
-//         const { name, value } = e.target;
-//         setFormData(prev => ({ ...prev, [name]: value }));
-//     };
-
-//     const handleImageChange = (e) => {
-//         const file = e.target.files[0];
-//         if (file) {
-//             setFormData(prev => ({ ...prev, imageFile: file }));
-//             setImagePreview(URL.createObjectURL(file));
-//         }
-//     };
-
-//     const removeImage = () => {
-//         setFormData(prev => ({ ...prev, imageFile: null }));
-//         setImagePreview(null);
-//     };
-
-//     const handleCategoryBlur = () => {
-//         if (!formData.category) return;
-//         let formatted = formData.category
-//             .toLowerCase()
-//             .trim()
-//             .replace(/-/g, ' ')
-//             .replace(/\s+/g, ' ')
-//             .replace(/\b\w/g, (char) => char.toUpperCase());
-//         setFormData(prev => ({ ...prev, category: formatted }));
-//     };
-
-//     const handleAddItem = async (e) => {
-//         e.preventDefault();
-//         setLoading(true);
-
-//         const rawRestaurantId = sessionStorage.getItem("restaurant_id");
-
-//         if (!rawRestaurantId) {
-//             alert("Session Error: Please Log In again.");
-//             setLoading(false);
-//             return;
-//         }
-
-//         if (!formData.name || !formData.originalPrice || !formData.category) {
-//             alert("Please fill in the required fields (Name, Price, Category).");
-//             setLoading(false);
-//             return;
-//         }
-
-//         try {
-//             const data = new FormData();
-//             data.append("name", formData.name);
-//             data.append("description", formData.description);
-//             data.append("price", formData.originalPrice);
-//             data.append("discount_price", formData.discountPrice);
-//             data.append("is_veg", formData.isVeg);
-//             data.append("category", formData.category);
-//             data.append("restaurant_id", rawRestaurantId);
-
-//             if (formData.imageFile) {
-//                 data.append("image", formData.imageFile);
-//             }
-
-//             await api.post("/api/menu/add", data);
-
-//             alert("Item added successfully!");
-
-//             setFormData({
-//                 name: "", description: "", originalPrice: "", discountPrice: "",
-//                 isVeg: true, category: "", imageFile: null
-//             });
-//             setImagePreview(null);
-
-//         } catch (error) {
-//             console.error("Full Error:", error);
-//             const msg = error.response?.data?.detail || "Failed to add item.";
-//             alert(`Error: ${JSON.stringify(msg)}`);
-//         } finally {
-//             setLoading(false);
-//         }
-//     };
-
-//     return (
-//         // Theme Change: Background is now a soft orange tint
-//         <div className="min-h-screen bg-orange-50/60 p-6 md:p-12 flex justify-center font-sans">
-//             <div className="w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl shadow-orange-100 overflow-hidden border border-white">
-
-//                 {/* Theme Change: Header is now a Gradient Orange */}
-//                 <div className="bg-gradient-to-r from-orange-400 to-orange-600 p-8 text-white flex justify-between items-center relative overflow-hidden">
-//                     {/* Decorative Circle */}
-//                     <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-
-//                     <div className="relative z-10">
-//                         <div className="flex items-center gap-2 mb-1">
-//                             <Sparkles className="w-5 h-5 text-yellow-200" />
-//                             <span className="text-orange-100 font-semibold tracking-wide text-xs uppercase">Menu Creator</span>
-//                         </div>
-//                         <h2 className="text-3xl font-extrabold tracking-tight">Add New Item</h2>
-//                         <p className="text-orange-50 mt-1 text-sm font-medium opacity-90">Craft your culinary masterpiece</p>
-//                     </div>
-//                     <div className="hidden md:flex bg-white/20 backdrop-blur-sm p-3 rounded-2xl border border-white/30 shadow-inner">
-//                         <Tag className="w-7 h-7 text-white" />
-//                     </div>
-//                 </div>
-
-//                 <form onSubmit={handleAddItem} className="p-8 md:p-10">
-//                     <div className="flex flex-col md:flex-row gap-12">
-
-//                         {/* LEFT COLUMN: Image Upload */}
-//                         <div className="w-full md:w-1/3 flex flex-col gap-5">
-//                             <label className="block text-sm font-bold text-gray-700">Product Image</label>
-
-//                             {/* Theme Change: Dashed border is orange on hover/active */}
-//                             <div className={`relative h-64 w-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all overflow-hidden bg-orange-50/50
-//                                 ${imagePreview ? 'border-orange-500 shadow-md shadow-orange-100' : 'border-orange-200 hover:border-orange-400 hover:bg-orange-50'}`}>
-
-//                                 {imagePreview ? (
-//                                     <>
-//                                         <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-//                                         <button
-//                                             type="button"
-//                                             onClick={removeImage}
-//                                             className="absolute top-2 right-2 bg-white p-2 rounded-full text-red-500 hover:text-red-600 shadow-lg transition transform hover:scale-110"
-//                                         >
-//                                             <X className="w-4 h-4" />
-//                                         </button>
-//                                     </>
-//                                 ) : (
-//                                     <label className="cursor-pointer flex flex-col items-center w-full h-full justify-center group">
-//                                         <div className="bg-white p-4 rounded-full mb-3 text-orange-500 shadow-sm group-hover:scale-110 transition-transform duration-300">
-//                                             <ImagePlus className="w-8 h-8" />
-//                                         </div>
-//                                         <span className="text-sm font-bold text-gray-600 group-hover:text-orange-600 transition-colors">Upload Photo</span>
-//                                         <span className="text-[10px] text-gray-400 mt-1">Supports PNG, JPG</span>
-//                                         <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-//                                     </label>
-//                                 )}
-//                             </div>
-
-//                             {/* Veg / Non-Veg Toggle */}
-//                             <div className="mt-2">
-//                                 <label className="block text-sm font-bold text-gray-700 mb-2">Dietary Type</label>
-//                                 <div className="flex bg-orange-50 p-1.5 rounded-2xl border border-orange-100">
-//                                     <button
-//                                         type="button"
-//                                         onClick={() => setFormData(p => ({ ...p, isVeg: true }))}
-//                                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${formData.isVeg
-//                                             ? 'bg-white text-green-600 shadow-md shadow-orange-100/50'
-//                                             : 'text-gray-400 hover:text-gray-600'
-//                                             }`}
-//                                     >
-//                                         <Leaf className="w-4 h-4 fill-current" /> Veg
-//                                     </button>
-//                                     <button
-//                                         type="button"
-//                                         onClick={() => setFormData(p => ({ ...p, isVeg: false }))}
-//                                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${!formData.isVeg
-//                                             ? 'bg-white text-red-600 shadow-md shadow-orange-100/50'
-//                                             : 'text-gray-400 hover:text-gray-600'
-//                                             }`}
-//                                     >
-//                                         <Drumstick className="w-4 h-4 fill-current" /> Non-Veg
-//                                     </button>
-//                                 </div>
-//                             </div>
-//                         </div>
-
-//                         {/* RIGHT COLUMN: Details */}
-//                         <div className="w-full md:w-2/3 flex flex-col gap-6">
-
-//                             {/* Name & Category Row */}
-//                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-//                                 <div className="group">
-//                                     <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
-//                                         <Type className="w-4 h-4 text-orange-500" /> Item Name
-//                                     </label>
-//                                     <input
-//                                         name="name"
-//                                         value={formData.name}
-//                                         onChange={handleChange}
-//                                         placeholder="e.g. Butter Paneer"
-//                                         className="w-full bg-white border border-gray-200 p-4 rounded-2xl focus:outline-none focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all font-medium text-gray-700 placeholder-gray-300 shadow-sm"
-//                                     />
-//                                 </div>
-
-//                                 <div className="group">
-//                                     <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
-//                                         <Tag className="w-4 h-4 text-orange-500" /> Category
-//                                     </label>
-//                                     <input
-//                                         name="category"
-//                                         value={formData.category}
-//                                         onChange={handleChange}
-//                                         onBlur={handleCategoryBlur}
-//                                         placeholder="e.g. Punjabi"
-//                                         className="w-full bg-white border border-gray-200 p-4 rounded-2xl focus:outline-none focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all font-medium text-gray-700 placeholder-gray-300 shadow-sm"
-//                                     />
-//                                 </div>
-//                             </div>
-
-//                             {/* Description */}
-//                             <div>
-//                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
-//                                     <FileText className="w-4 h-4 text-orange-500" /> Short Description
-//                                 </label>
-//                                 <textarea
-//                                     name="description"
-//                                     value={formData.description}
-//                                     onChange={handleChange}
-//                                     rows="3"
-//                                     placeholder="Describe the flavors..."
-//                                     className="w-full bg-white border border-gray-200 p-4 rounded-2xl focus:outline-none focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all resize-none text-gray-700 placeholder-gray-300 shadow-sm"
-//                                 ></textarea>
-//                             </div>
-
-//                             {/* Pricing Row */}
-//                             <div className="grid grid-cols-2 gap-6 bg-gradient-to-br from-orange-50 to-white p-5 rounded-2xl border border-orange-100">
-//                                 <div>
-//                                     <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-//                                         Original Price
-//                                     </label>
-//                                     <div className="relative group">
-//                                         <span className="absolute left-4 top-3.5 text-gray-400 font-bold group-focus-within:text-orange-500 transition-colors">₹</span>
-//                                         <input
-//                                             type="number"
-//                                             name="originalPrice"
-//                                             value={formData.originalPrice}
-//                                             onChange={handleChange}
-//                                             placeholder="00"
-//                                             className="w-full pl-9 pr-4 py-3 rounded-xl border-2 border-transparent bg-white focus:border-orange-300 focus:ring-0 outline-none font-bold text-gray-700 transition-all shadow-sm"
-//                                         />
-//                                     </div>
-//                                 </div>
-
-//                                 <div>
-//                                     <label className="flex items-center gap-2 text-xs font-bold text-orange-600 uppercase tracking-wide mb-2">
-//                                         Discount Price
-//                                     </label>
-//                                     <div className="relative group">
-//                                         <span className="absolute left-4 top-3.5 text-orange-500 font-bold">₹</span>
-//                                         <input
-//                                             type="number"
-//                                             name="discountPrice"
-//                                             value={formData.discountPrice}
-//                                             onChange={handleChange}
-//                                             placeholder="00"
-//                                             className="w-full pl-9 pr-4 py-3 rounded-xl border-2 border-orange-100 bg-white focus:border-orange-400 focus:ring-0 outline-none font-bold text-orange-600 transition-all shadow-sm"
-//                                         />
-//                                     </div>
-//                                 </div>
-//                             </div>
-
-//                             {/* Submit Button */}
-//                             {/* Theme Change: Gradient Orange Button */}
-//                             <button
-//                                 type="submit"
-//                                 disabled={loading}
-//                                 className="mt-4 w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-orange-200 hover:shadow-orange-300 hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98]"
-//                             >
-//                                 {loading ? (
-//                                     <>
-//                                         <Loader2 className="animate-spin w-5 h-5" /> Publishing...
-//                                     </>
-//                                 ) : (
-//                                     <>
-//                                         <Upload className="w-5 h-5" /> Publish to Menu
-//                                     </>
-//                                 )}
-//                             </button>
-
-//                         </div>
-//                     </div>
-//                 </form>
-//             </div>
-//         </div>
-//     );
-// };
-
-// export default RestaurantMenu;
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
-    Upload,
-    IndianRupee,
-    Leaf,
-    Drumstick,
-    Tag,
-    Type,
-    FileText,
-    Loader2,
-    ImagePlus,
-    X,
-    Sparkles
+    Plus, X, Image as ImageIcon, Leaf, Drumstick, Edit, Trash2,
+    Tag, UploadCloud, Eye, EyeOff, Check, Save, Loader2, Search
 } from "lucide-react";
-import api from "../../services/api";
+
+// --- HELPER: Lazy Load Images ---
+const getImageUrl = (item) => {
+    if (!item) return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
+    if (typeof item === 'string' && item.startsWith('blob:')) return item;
+    if (item.image && (item.image.startsWith("data:") || item.image.startsWith("http"))) {
+        return item.image;
+    }
+    return `http://localhost:8000/api/menu/image/${item.id}`;
+};
 
 const RestaurantMenu = () => {
-    const [loading, setLoading] = useState(false);
-    const [imagePreview, setImagePreview] = useState(null);
+    const [showModal, setShowModal] = useState(false);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const dropdownRef = useRef(null);
 
-    const [formData, setFormData] = useState({
+    const [isLoading, setIsLoading] = useState(true);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editId, setEditId] = useState(null);
+    const [searchTerm, setSearchTerm] = useState("");
+
+    const [dbCategories, setDbCategories] = useState([]);
+    const [menuItems, setMenuItems] = useState([]);
+
+    const initialFormState = {
         name: "",
-        description: "",
-        originalPrice: "",
-        discountPrice: "",
-        isVeg: true,
         category: "",
-        imageFile: null
-    });
+        description: "",
+        price: "",
+        discountPrice: "",
+        type: "veg",
+        isAvailable: true,
+        image: null
+    };
+    const [newItem, setNewItem] = useState(initialFormState);
+    const [previewImage, setPreviewImage] = useState(null);
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+    const getAuthData = () => {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+        const resId = sessionStorage.getItem("restaurant_id") || localStorage.getItem("restaurant_id");
+        return {
+            headers: token ? { "Authorization": `Bearer ${token}` } : {},
+            restaurantId: resId
+        };
     };
 
-    const handleImageChange = (e) => {
+    const fetchData = async () => {
+        try {
+            setIsLoading(true);
+            const { headers } = getAuthData();
+
+            const catRes = await fetch("http://localhost:8000/api/categories", { headers });
+            const catData = await catRes.json();
+            setDbCategories(Array.isArray(catData) ? catData : []);
+
+            const menuRes = await fetch("http://localhost:8000/api/menu", { headers });
+            const menuData = await menuRes.json();
+            setMenuItems(Array.isArray(menuData) ? menuData : []);
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const handleAddNew = () => {
+        setNewItem(initialFormState);
+        setPreviewImage(null);
+        setIsEditing(false);
+        setEditId(null);
+        setShowModal(true);
+    };
+
+    const handleEdit = (item) => {
+        setNewItem({
+            name: item.name,
+            category: item.category,
+            description: item.description || "",
+            price: item.price,
+            discountPrice: item.discountPrice !== undefined ? item.discountPrice : (item.discount_price || ""),
+
+            // --- FIX 1: Map boolean 'is_veg' to string 'veg'/'non-veg' for the form ---
+            type: item.is_veg ? "veg" : "non-veg",
+
+            isAvailable: item.isAvailable,
+            image: null
+        });
+
+        setPreviewImage(getImageUrl(item));
+        setIsEditing(true);
+        setEditId(item.id);
+        setShowModal(true);
+    };
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setNewItem({ ...newItem, [name]: value });
+        if (name === "category") setShowSuggestions(true);
+    };
+
+    const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
-            setFormData(prev => ({ ...prev, imageFile: file }));
-            setImagePreview(URL.createObjectURL(file));
+            setNewItem({ ...newItem, image: file });
+            setPreviewImage(URL.createObjectURL(file));
         }
     };
 
-    const removeImage = () => {
-        setFormData(prev => ({ ...prev, imageFile: null }));
-        setImagePreview(null);
+    const selectCategory = (cat) => {
+        setNewItem({ ...newItem, category: cat });
+        setShowSuggestions(false);
     };
 
-    const handleCategoryBlur = () => {
-        if (!formData.category) return;
-        let formatted = formData.category
-            .toLowerCase()
-            .trim()
-            .replace(/-/g, ' ')
-            .replace(/\s+/g, ' ')
-            .replace(/\b\w/g, (char) => char.toUpperCase());
-        setFormData(prev => ({ ...prev, category: formatted }));
-    };
-
-    // --- FIXED HANDLER ---
-    const handleAddItem = async (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
+        const { headers, restaurantId } = getAuthData();
 
-        const rawRestaurantId = sessionStorage.getItem("restaurant_id");
+        const formData = new FormData();
+        formData.append("name", newItem.name);
+        formData.append("category", newItem.category);
+        formData.append("description", newItem.description);
+        formData.append("price", newItem.price);
 
-        if (!rawRestaurantId) {
-            alert("Session Error: Please Log In again.");
-            setLoading(false);
-            return;
+        if (newItem.discountPrice !== "" && newItem.discountPrice !== null) {
+            formData.append("discountPrice", newItem.discountPrice);
         }
 
-        if (!formData.name || !formData.originalPrice || !formData.category) {
-            alert("Please fill in the required fields (Name, Price, Category).");
-            setLoading(false);
-            return;
+        formData.append("type", newItem.type);
+        formData.append("isAvailable", newItem.isAvailable.toString());
+
+        if (restaurantId) {
+            formData.append("restaurant_id", restaurantId);
+        }
+
+        if (newItem.image) {
+            formData.append("image", newItem.image);
         }
 
         try {
-            const data = new FormData();
+            const url = isEditing
+                ? `http://localhost:8000/api/menu/${editId}`
+                : "http://localhost:8000/api/menu";
 
-            // 1. Text Fields
-            data.append("name", formData.name);
-            data.append("description", formData.description || "");
-            data.append("category", formData.category);
-            data.append("restaurant_id", rawRestaurantId);
+            const method = isEditing ? "PUT" : "POST";
 
-            // 2. Boolean (Convert to string for FormData)
-            data.append("is_veg", formData.isVeg);
-
-            // 3. Numbers (CRITICAL FIX: Ensure they aren't empty strings)
-            // If originalPrice is text, convert to float.
-            data.append("price", parseFloat(formData.originalPrice));
-
-            // If discountPrice is empty, send '0' or don't send it at all. 
-            // Sending "" causes the 500 error on backend.
-            if (formData.discountPrice) {
-                data.append("discount_price", parseFloat(formData.discountPrice));
-            }
-
-            // 4. File
-            if (formData.imageFile) {
-                data.append("image", formData.imageFile);
-            }
-
-            // 5. Send Request (No manual Content-Type header needed)
-            await api.post("/api/menu/add", data);
-
-            alert("Item added successfully!");
-
-            // Reset Form
-            setFormData({
-                name: "", description: "", originalPrice: "", discountPrice: "",
-                isVeg: true, category: "", imageFile: null
+            const response = await fetch(url, {
+                method: method,
+                headers: headers,
+                body: formData
             });
-            setImagePreview(null);
 
-        } catch (error) {
-            console.error("Full Error:", error);
-            // Check if it's a backend response error
-            if (error.response && error.response.data) {
-                const msg = error.response.data.detail || JSON.stringify(error.response.data);
-                alert(`Server Error: ${msg}`);
+            if (response.ok) {
+                setShowModal(false);
+                fetchData();
             } else {
-                alert("Failed to connect to server. Check console for details.");
+                const err = await response.json();
+                alert("Failed: " + (err.detail || "Check console"));
+                console.error(err);
             }
-        } finally {
-            setLoading(false);
+        } catch (error) {
+            console.error("Connection Error:", error);
         }
     };
 
+    const handleDelete = async (id) => {
+        if (!window.confirm("Delete this item?")) return;
+        try {
+            const { headers } = getAuthData();
+            await fetch(`http://localhost:8000/api/menu/${id}`, {
+                method: "DELETE",
+                headers: headers
+            });
+            setMenuItems(menuItems.filter(item => item.id !== id));
+        } catch (error) {
+            console.error("Error deleting:", error);
+        }
+    };
+
+    const toggleStatus = async (item) => {
+        const updatedStatus = !item.isAvailable;
+        setMenuItems(menuItems.map(i => i.id === item.id ? { ...i, isAvailable: updatedStatus } : i));
+
+        try {
+            const { headers } = getAuthData();
+            const formData = new FormData();
+            formData.append("isAvailable", updatedStatus.toString());
+
+            await fetch(`http://localhost:8000/api/menu/${item.id}`, {
+                method: "PUT",
+                headers: headers,
+                body: formData
+            });
+        } catch (error) {
+            console.error("Error updating status:", error);
+            fetchData();
+        }
+    };
+
+    const filteredItems = menuItems.filter(item =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.category.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (isLoading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-orange-500" size={40} /></div>;
+
     return (
-        <div className="min-h-screen bg-orange-50/60 p-6 md:p-12 flex justify-center font-sans">
-            <div className="w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl shadow-orange-100 overflow-hidden border border-white">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
-                <div className="bg-gradient-to-r from-orange-400 to-orange-600 p-8 text-white flex justify-between items-center relative overflow-hidden">
-                    <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Sparkles className="w-5 h-5 text-yellow-200" />
-                            <span className="text-orange-100 font-semibold tracking-wide text-xs uppercase">Menu Creator</span>
-                        </div>
-                        <h2 className="text-3xl font-extrabold tracking-tight">Add New Item</h2>
-                        <p className="text-orange-50 mt-1 text-sm font-medium opacity-90">Craft your culinary masterpiece</p>
+            {/* HEADER */}
+            <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Menu Items</h2>
+                    <p className="text-slate-500 font-medium">Manage your dishes</p>
+                </div>
+                <div className="flex gap-3 w-full md:w-auto">
+                    <div className="relative flex-1 md:w-64 group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 text-sm" />
                     </div>
-                    <div className="hidden md:flex bg-white/20 backdrop-blur-sm p-3 rounded-2xl border border-white/30 shadow-inner">
-                        <Tag className="w-7 h-7 text-white" />
+                    <button onClick={handleAddNew} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors shadow-xl">
+                        <Plus size={18} /> Add Item
+                    </button>
+                </div>
+            </div>
+
+            {/* GRID */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredItems.map((item) => (
+                    <div key={item.id} className={`group bg-white rounded-[2rem] p-4 border transition-all hover:shadow-xl ${!item.isAvailable ? 'opacity-75 bg-slate-50' : 'border-white'}`}>
+                        <div className="h-48 bg-slate-100 rounded-[1.5rem] relative overflow-hidden mb-5">
+                            {/* FAST IMAGE LOADING */}
+                            <img
+                                src={getImageUrl(item)}
+                                alt={item.name}
+                                loading="lazy"
+                                onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                }}
+                                className="w-full h-full object-cover transition-opacity duration-300"
+                            />
+                            <div className="absolute inset-0 hidden items-center justify-center text-slate-300 bg-slate-100">
+                                <ImageIcon size={40} />
+                            </div>
+
+                            <div className="absolute top-4 left-4 flex gap-2">
+                                {/* --- FIX 2: Use item.is_veg (boolean) instead of item.type (string) --- */}
+                                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black backdrop-blur-md shadow-sm flex items-center gap-1.5 ${item.is_veg ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                                    {item.is_veg ? <Leaf size={10} fill="currentColor" /> : <Drumstick size={10} fill="currentColor" />}
+                                    {item.is_veg ? 'VEG' : 'NON'}
+                                </span>
+                            </div>
+                            {!item.isAvailable && (
+                                <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
+                                    <span className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2"><EyeOff size={14} /> Offline</span>
+                                </div>
+                            )}
+                        </div>
+                        <div className="px-2 mb-5">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-[10px] font-black text-orange-500 uppercase bg-orange-50 px-2 py-1 rounded-md">{item.category}</span>
+                                <div className="text-right">
+                                    <span className="block text-lg font-black text-slate-800">₹{item.price}</span>
+                                    {(item.discountPrice || item.discount_price) && <span className="block text-xs font-bold text-slate-400 line-through">₹{item.discountPrice || item.discount_price}</span>}
+                                </div>
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800 mb-1">{item.name}</h3>
+                            <p className="text-slate-400 text-sm line-clamp-2">{item.description}</p>
+                        </div>
+                        <div className="grid grid-cols-5 gap-2">
+                            <button onClick={() => toggleStatus(item)} className="col-span-2 h-10 rounded-xl flex items-center justify-center gap-2 font-bold text-xs bg-slate-100 text-slate-500 hover:bg-slate-200">
+                                {item.isAvailable ? <><Eye size={16} /> Live</> : <><EyeOff size={16} /> Offline</>}
+                            </button>
+                            <button onClick={() => handleEdit(item)} className="col-span-2 h-10 rounded-xl bg-blue-50 text-blue-600 font-bold text-xs hover:bg-blue-100 flex items-center justify-center gap-2"><Edit size={16} /> Edit</button>
+                            <button onClick={() => handleDelete(item.id)} className="col-span-1 h-10 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center"><Trash2 size={18} /></button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* MODAL */}
+            {showModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl animate-in zoom-in-95">
+                        <div className="bg-slate-900 px-8 py-6 flex justify-between items-center text-white">
+                            <h3 className="text-2xl font-bold">{isEditing ? "Edit Item" : "Add New Item"}</h3>
+                            <button onClick={() => setShowModal(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-full"><X size={20} /></button>
+                        </div>
+                        <div className="p-8 grid grid-cols-1 md:grid-cols-12 gap-10">
+                            <div className="md:col-span-5 space-y-6">
+                                <label className="border-2 border-dashed rounded-3xl h-60 flex flex-col items-center justify-center cursor-pointer relative bg-slate-50 hover:bg-slate-100 overflow-hidden">
+                                    {previewImage ?
+                                        <img src={previewImage} className="w-full h-full object-cover" alt="Preview" /> :
+                                        <div className="flex flex-col items-center"><UploadCloud className="text-orange-500 mb-2" size={32} /><span className="text-sm font-bold text-slate-500">Upload Image</span></div>
+                                    }
+                                    <input type="file" onChange={handleFileChange} accept="image/*" className="hidden" />
+                                </label>
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => setNewItem({ ...newItem, isAvailable: true })} className={`flex-1 py-3 rounded-xl text-xs font-bold ${newItem.isAvailable ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Live</button>
+                                    <button type="button" onClick={() => setNewItem({ ...newItem, isAvailable: false })} className={`flex-1 py-3 rounded-xl text-xs font-bold ${!newItem.isAvailable ? 'bg-slate-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Offline</button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => setNewItem({ ...newItem, type: 'veg' })} className={`flex-1 py-3 rounded-xl text-xs font-bold ${newItem.type === 'veg' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>Veg</button>
+                                    <button type="button" onClick={() => setNewItem({ ...newItem, type: 'non-veg' })} className={`flex-1 py-3 rounded-xl text-xs font-bold ${newItem.type === 'non-veg' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'}`}>Non-Veg</button>
+                                </div>
+                            </div>
+                            <div className="md:col-span-7 space-y-5">
+                                <input type="text" name="name" value={newItem.name} onChange={handleInputChange} placeholder="Item Name" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-orange-500/20" />
+
+                                <div className="relative" ref={dropdownRef}>
+                                    <input type="text" name="category" value={newItem.category} onChange={handleInputChange} placeholder="Category" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-orange-500/20" />
+                                    {showSuggestions && newItem.category && (
+                                        <div className="absolute w-full bg-white border border-slate-100 rounded-xl shadow-xl mt-2 z-10 max-h-40 overflow-y-auto">
+                                            {dbCategories.filter(c => c.toLowerCase().includes(newItem.category.toLowerCase())).map((c, i) => (
+                                                <div key={i} onClick={() => selectCategory(c)} className="px-4 py-3 hover:bg-slate-50 cursor-pointer text-sm font-bold text-slate-600">{c}</div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <textarea name="description" value={newItem.description} onChange={handleInputChange} placeholder="Description" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-medium text-slate-600 h-32 resize-none outline-none focus:ring-2 focus:ring-orange-500/20"></textarea>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input type="number" name="price" value={newItem.price} onChange={handleInputChange} placeholder="Price" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none" />
+                                    <input type="number" name="discountPrice" value={newItem.discountPrice} onChange={handleInputChange} placeholder="Discount Price" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none" />
+                                </div>
+
+                                <button onClick={handleSubmit} className="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-orange-600 transition-colors shadow-xl">
+                                    {isEditing ? "Update Item" : "Save Item"}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                <form onSubmit={handleAddItem} className="p-8 md:p-10">
-                    <div className="flex flex-col md:flex-row gap-12">
-
-                        {/* LEFT COLUMN: Image Upload */}
-                        <div className="w-full md:w-1/3 flex flex-col gap-5">
-                            <label className="block text-sm font-bold text-gray-700">Product Image</label>
-
-                            <div className={`relative h-64 w-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all overflow-hidden bg-orange-50/50
-                                ${imagePreview ? 'border-orange-500 shadow-md shadow-orange-100' : 'border-orange-200 hover:border-orange-400 hover:bg-orange-50'}`}>
-
-                                {imagePreview ? (
-                                    <>
-                                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                                        <button
-                                            type="button"
-                                            onClick={removeImage}
-                                            className="absolute top-2 right-2 bg-white p-2 rounded-full text-red-500 hover:text-red-600 shadow-lg transition transform hover:scale-110"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </>
-                                ) : (
-                                    <label className="cursor-pointer flex flex-col items-center w-full h-full justify-center group">
-                                        <div className="bg-white p-4 rounded-full mb-3 text-orange-500 shadow-sm group-hover:scale-110 transition-transform duration-300">
-                                            <ImagePlus className="w-8 h-8" />
-                                        </div>
-                                        <span className="text-sm font-bold text-gray-600 group-hover:text-orange-600 transition-colors">Upload Photo</span>
-                                        <span className="text-[10px] text-gray-400 mt-1">Supports PNG, JPG</span>
-                                        <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-                                    </label>
-                                )}
-                            </div>
-
-                            {/* Veg / Non-Veg Toggle */}
-                            <div className="mt-2">
-                                <label className="block text-sm font-bold text-gray-700 mb-2">Dietary Type</label>
-                                <div className="flex bg-orange-50 p-1.5 rounded-2xl border border-orange-100">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData(p => ({ ...p, isVeg: true }))}
-                                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${formData.isVeg
-                                            ? 'bg-white text-green-600 shadow-md shadow-orange-100/50'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            }`}
-                                    >
-                                        <Leaf className="w-4 h-4 fill-current" /> Veg
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData(p => ({ ...p, isVeg: false }))}
-                                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${!formData.isVeg
-                                            ? 'bg-white text-red-600 shadow-md shadow-orange-100/50'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            }`}
-                                    >
-                                        <Drumstick className="w-4 h-4 fill-current" /> Non-Veg
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* RIGHT COLUMN: Details */}
-                        <div className="w-full md:w-2/3 flex flex-col gap-6">
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="group">
-                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
-                                        <Type className="w-4 h-4 text-orange-500" /> Item Name
-                                    </label>
-                                    <input
-                                        name="name"
-                                        value={formData.name}
-                                        onChange={handleChange}
-                                        placeholder="e.g. Butter Paneer"
-                                        className="w-full bg-white border border-gray-200 p-4 rounded-2xl focus:outline-none focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all font-medium text-gray-700 placeholder-gray-300 shadow-sm"
-                                    />
-                                </div>
-
-                                <div className="group">
-                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
-                                        <Tag className="w-4 h-4 text-orange-500" /> Category
-                                    </label>
-                                    <input
-                                        name="category"
-                                        value={formData.category}
-                                        onChange={handleChange}
-                                        onBlur={handleCategoryBlur}
-                                        placeholder="e.g. Punjabi"
-                                        className="w-full bg-white border border-gray-200 p-4 rounded-2xl focus:outline-none focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all font-medium text-gray-700 placeholder-gray-300 shadow-sm"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
-                                    <FileText className="w-4 h-4 text-orange-500" /> Short Description
-                                </label>
-                                <textarea
-                                    name="description"
-                                    value={formData.description}
-                                    onChange={handleChange}
-                                    rows="3"
-                                    placeholder="Describe the flavors..."
-                                    className="w-full bg-white border border-gray-200 p-4 rounded-2xl focus:outline-none focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all resize-none text-gray-700 placeholder-gray-300 shadow-sm"
-                                ></textarea>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-6 bg-gradient-to-br from-orange-50 to-white p-5 rounded-2xl border border-orange-100">
-                                <div>
-                                    <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                                        Original Price
-                                    </label>
-                                    <div className="relative group">
-                                        <span className="absolute left-4 top-3.5 text-gray-400 font-bold group-focus-within:text-orange-500 transition-colors">₹</span>
-                                        <input
-                                            type="number"
-                                            name="originalPrice"
-                                            value={formData.originalPrice}
-                                            onChange={handleChange}
-                                            placeholder="00"
-                                            className="w-full pl-9 pr-4 py-3 rounded-xl border-2 border-transparent bg-white focus:border-orange-300 focus:ring-0 outline-none font-bold text-gray-700 transition-all shadow-sm"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="flex items-center gap-2 text-xs font-bold text-orange-600 uppercase tracking-wide mb-2">
-                                        Discount Price
-                                    </label>
-                                    <div className="relative group">
-                                        <span className="absolute left-4 top-3.5 text-orange-500 font-bold">₹</span>
-                                        <input
-                                            type="number"
-                                            name="discountPrice"
-                                            value={formData.discountPrice}
-                                            onChange={handleChange}
-                                            placeholder="00"
-                                            className="w-full pl-9 pr-4 py-3 rounded-xl border-2 border-orange-100 bg-white focus:border-orange-400 focus:ring-0 outline-none font-bold text-orange-600 transition-all shadow-sm"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="mt-4 w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-orange-200 hover:shadow-orange-300 hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98]"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="animate-spin w-5 h-5" /> Publishing...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Upload className="w-5 h-5" /> Publish to Menu
-                                    </>
-                                )}
-                            </button>
-
-                        </div>
-                    </div>
-                </form>
-            </div>
+            )}
         </div>
     );
 };

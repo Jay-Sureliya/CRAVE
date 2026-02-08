@@ -1,277 +1,14 @@
-# import os
-# import smtplib
-# import base64
-# from email.mime.text import MIMEText
-# from email.mime.multipart import MIMEMultipart
-# from email.mime.image import MIMEImage
-# from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks 
-# from sqlalchemy.orm import Session
-# from passlib.context import CryptContext
-# from pydantic import BaseModel
-# from typing import Optional, List
-
-# # --- INTERNAL IMPORTS ---
-# from app.db.session import get_db
-# from app.models.restaurant_request import RestaurantRequest
-# from app.models.rider_request import RiderRequest 
-# from app.models.user import User, Restaurant
-# from app.models.rider import Rider
-
-# # --- CONFIGURATION ---
-# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-# router = APIRouter(prefix="/admin", tags=["Admin"])
-
-# # ===========================
-# # 1. PYDANTIC SCHEMAS
-# # ===========================
-
-# class AdminUserResponse(BaseModel):
-#     id: int
-#     username: Optional[str] = None
-#     email: Optional[str] = None
-#     role: str
-#     phone: Optional[str] = None
-    
-#     class Config:
-#         from_attributes = True
-
-# class AdminRequestResponse(BaseModel):
-#     id: int
-#     restaurant_name: str
-#     owner_name: str
-#     email: str
-#     phone: str
-#     address: str
-#     status: str
-    
-#     class Config:
-#         from_attributes = True
-
-# class AdminRiderResponse(BaseModel):
-#     id: int
-#     full_name: str
-#     email: str
-#     phone: str
-#     city: str
-#     vehicle_type: str
-#     status: str
-
-#     class Config:
-#         from_attributes = True
-
-# # ===========================
-# # 2. HELPER FUNCTIONS
-# # ===========================
-
-# def get_password_hash(password):
-#     return pwd_context.hash(password)
-
-# def _send_email_core(to_email, subject, body, image_base64=None):
-#     sender_email = os.getenv("MAIL_USERNAME")
-#     sender_password = os.getenv("MAIL_PASSWORD")
-
-#     if not sender_email or not sender_password:
-#         print("⚠️ Skipped Email: Missing Credentials in .env")
-#         return
-
-#     msg = MIMEMultipart("related")
-#     msg["From"] = f"Crave Support <{sender_email}>"
-#     msg["To"] = to_email
-#     msg["Subject"] = subject
-#     msg_html = MIMEText(body, "html")
-#     msg.attach(msg_html)
-
-#     if image_base64 and "base64," in image_base64:
-#         try:
-#             header, encoded = image_base64.split("base64,", 1)
-#             img_data = base64.b64decode(encoded)
-#             img = MIMEImage(img_data)
-#             img.add_header('Content-ID', '<profile_pic>')
-#             img.add_header('Content-Disposition', 'inline')
-#             msg.attach(img)
-#         except Exception as e:
-#             print(f"⚠️ Image embedding failed: {e}")
-
-#     try:
-#         server = smtplib.SMTP("smtp.gmail.com", 587)
-#         server.starttls()
-#         server.login(sender_email, sender_password)
-#         server.sendmail(sender_email, to_email, msg.as_string())
-#         server.quit()
-#         print(f"✅ Email sent to {to_email}")
-#     except Exception as e:
-#         print(f"❌ Email Failed: {e}")
-
-# def send_login_email(to_email: str, username: str, password: str):
-#     subject = "Welcome to the Crave Family! 🍽️"
-#     body = f"""<html><body><h1>Welcome!</h1><p>User: {username}</p><p>Pass: {password}</p></body></html>"""
-#     _send_email_core(to_email, subject, body)
-
-# def send_update_email(to_email, name, username, address, password=None, profile_image=None):
-#     pass
-
-# # --- SMS SENDER (MOCK) ---
-# def send_sms_credentials(phone: str, username: str, password: str):
-#     print(f"\n📲 [SMS MOCK] Sending to {phone}: Welcome! User: {username}, Pass: {password}\n")
-
-# # ===========================
-# # 3. ROUTES
-# # ===========================
-
-# @router.get("/dashboard")
-# def get_admin_stats(db: Session = Depends(get_db)):
-#     return {
-#         "stats": {
-#             "revenue": "₹0",
-#             "total_orders": "0",
-#             "active_drivers": db.query(User).filter(User.role == "driver").count(),
-#             "pending_requests": db.query(RestaurantRequest).filter(RestaurantRequest.status == "pending").count()
-#         }
-#     }
-
-# @router.get("/users", response_model=List[AdminUserResponse])
-# def get_all_users(db: Session = Depends(get_db)):
-#     return db.query(User).all()
-
-# # --- RESTAURANT REQUESTS ---
-# @router.get("/requests", response_model=List[AdminRequestResponse])
-# def get_pending_requests(db: Session = Depends(get_db)):
-#     return db.query(RestaurantRequest).filter(RestaurantRequest.status == "pending").all()
-
-# @router.post("/approve/{request_id}")
-# def approve_restaurant(request_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-#     req = db.query(RestaurantRequest).filter(RestaurantRequest.id == request_id).first()
-#     if not req: raise HTTPException(status_code=404, detail="Request not found")
-#     if req.status == "approved": return {"message": "Already approved"}
-
-#     generated_username = req.email.split("@")[0] + "_owner"
-#     temp_password = "Pass" + str(req.id) + "word!" 
-#     hashed_pw = get_password_hash(temp_password)
-
-#     existing_user = db.query(User).filter(User.email == req.email).first()
-#     if not existing_user:
-#         new_user = User(
-#             username=generated_username, full_name=req.owner_name, email=req.email,
-#             phone=req.phone, hashed_password=hashed_pw, role="restaurant",
-#             profile_image="https://cdn-icons-png.flaticon.com/512/1996/1996055.png"
-#         )
-#         db.add(new_user)
-#         db.commit()
-    
-#     existing_restaurant = db.query(Restaurant).filter(Restaurant.email == req.email).first()
-#     if not existing_restaurant:
-#         new_restaurant = Restaurant(
-#             name=req.restaurant_name, email=req.email, password=hashed_pw,
-#             is_active=True, address=req.address
-#         )
-#         db.add(new_restaurant)
-#         db.commit()
-
-#     req.status = "approved"
-#     db.commit()
-
-#     if not existing_user:
-#         background_tasks.add_task(send_login_email, req.email, generated_username, temp_password)
-
-#     return {"message": "Request approved successfully", "username": generated_username}
-
-# @router.post("/reject/{request_id}")
-# def reject_restaurant_request(request_id: int, db: Session = Depends(get_db)):
-#     req = db.query(RestaurantRequest).filter(RestaurantRequest.id == request_id).first()
-#     if not req: raise HTTPException(status_code=404, detail="Request not found")
-#     req.status = "rejected"
-#     db.commit()
-#     return {"message": "Request rejected"}
-
-# @router.delete("/restaurants/{restaurant_id}")
-# def delete_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
-#     rest = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
-#     if not rest: raise HTTPException(status_code=404, detail="Restaurant not found")
-#     user = db.query(User).filter(User.email == rest.email).first()
-#     db.delete(rest)
-#     if user: db.delete(user)
-#     db.commit()
-#     return {"message": "Restaurant deleted"}
-
-# # --- RIDER REQUESTS ---
-
-# @router.get("/rider-requests", response_model=List[AdminRiderResponse])
-# def get_rider_requests(db: Session = Depends(get_db)):
-#     return db.query(RiderRequest).filter(RiderRequest.status == "pending").all()
-
-# # ✅ FIXED: Removed Duplicate Decorator here
-# @router.post("/rider-approve/{request_id}")
-# def approve_rider(request_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-#     # 1. Fetch Request
-#     req = db.query(RiderRequest).filter(RiderRequest.id == request_id).first()
-#     if not req: raise HTTPException(status_code=404, detail="Request not found")
-#     if req.status == "approved": return {"message": "Already approved"}
-
-#     # 2. Generate Credentials
-#     base_username = req.email.split("@")[0]
-#     generated_username = f"{base_username}_rider"
-#     if db.query(User).filter(User.username == generated_username).first():
-#         generated_username = f"{generated_username}_{req.id}"
-
-#     temp_password = f"Ride{req.id}Now!"
-#     hashed_pw = get_password_hash(temp_password)
-
-#     # 3. Create User Account
-#     existing_user = db.query(User).filter(User.email == req.email).first()
-#     if not existing_user:
-#         new_user = User(
-#             username=generated_username, full_name=req.full_name, email=req.email,
-#             phone=req.phone, hashed_password=hashed_pw, role="driver", 
-#             profile_image="https://cdn-icons-png.flaticon.com/512/1996/1996055.png"
-#         )
-#         db.add(new_user)
-#         db.commit()
-#         db.refresh(new_user)
-#         user_id = new_user.id
-#     else:
-#         user_id = existing_user.id
-#         if existing_user.role == "customer":
-#             existing_user.role = "driver"
-#             db.commit()
-
-#     # 4. Create Rider Profile
-#     existing_rider = db.query(Rider).filter(Rider.user_id == user_id).first()
-#     if not existing_rider:
-#         new_rider = Rider(
-#             user_id=user_id, vehicle_type=req.vehicle_type, city=req.city,
-#             is_active=True, is_available=True
-#         )
-#         db.add(new_rider)
-#         db.commit()
-
-#     # 5. Update Request Status & Send SMS
-#     req.status = "approved"
-#     db.commit()
-
-#     # NOTE: This prints to SERVER CONSOLE
-#     background_tasks.add_task(send_sms_credentials, req.phone, generated_username, temp_password)
-
-#     return {"message": "Rider approved", "username": generated_username}
-
-# @router.post("/rider-reject/{request_id}")
-# def reject_rider_request(request_id: int, db: Session = Depends(get_db)):
-#     req = db.query(RiderRequest).filter(RiderRequest.id == request_id).first()
-#     if not req: raise HTTPException(status_code=404, detail="Request not found")
-#     req.status = "rejected"
-#     db.commit()
-#     return {"message": "Rider request rejected"}
-
 import os
 import smtplib
 import base64
+from typing import Optional, List
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks 
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from typing import Optional, List
 
 # --- INTERNAL IMPORTS ---
 from app.db.session import get_db
@@ -445,12 +182,15 @@ def get_pending_requests(db: Session = Depends(get_db)):
 def approve_restaurant(request_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     req = db.query(RestaurantRequest).filter(RestaurantRequest.id == request_id).first()
     if not req: raise HTTPException(status_code=404, detail="Request not found")
-    if req.status == "approved": return {"message": "Already approved"}
+    
+    if req.status == "approved":
+        return {"message": "Already approved"}
 
     generated_username = req.email.split("@")[0] + "_owner"
     temp_password = "Pass" + str(req.id) + "word!" 
     hashed_pw = get_password_hash(temp_password)
 
+    # 1. Create/Check User Account
     existing_user = db.query(User).filter(User.email == req.email).first()
     if not existing_user:
         new_user = User(
@@ -460,16 +200,25 @@ def approve_restaurant(request_id: int, background_tasks: BackgroundTasks, db: S
         )
         db.add(new_user)
         db.commit()
-    
+        db.refresh(new_user)
+    else:
+        generated_username = existing_user.username
+        temp_password = "[Existing Password]"
+
+    # 2. Create/Check Restaurant Profile
     existing_restaurant = db.query(Restaurant).filter(Restaurant.email == req.email).first()
     if not existing_restaurant:
         new_restaurant = Restaurant(
-            name=req.restaurant_name, email=req.email, password=hashed_pw,
-            is_active=True, address=req.address
+            name=req.restaurant_name, 
+            email=req.email, 
+            password=hashed_pw,
+            is_active=True, 
+            address=req.address
         )
         db.add(new_restaurant)
         db.commit()
 
+    # 3. Update Request Status
     req.status = "approved"
     db.commit()
 

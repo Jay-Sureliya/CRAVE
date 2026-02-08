@@ -1,26 +1,25 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 
-# Base schema with shared fields
+# Base Schema (Shared Fields)
 class MenuItemBase(BaseModel):
     name: str
+    category: str
     description: Optional[str] = None
     price: float
-    discount_price: Optional[float] = None
-    category: str
+    # Auto-map snake_case to camelCase for Frontend
+    discount_price: Optional[float] = Field(None, serialization_alias="discountPrice")
     is_veg: bool = True
+    is_available: bool = Field(True, serialization_alias="isAvailable")
 
-# Schema for creating an item (matches your DB structure)
-class MenuItemCreate(MenuItemBase):
-    restaurant_id: int
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-# Schema for reading an item (returned to frontend)
-class MenuItemResponse(MenuItemBase):
+# 1. LITE Schema (For Fast Lists - NO IMAGE)
+class MenuItemLite(MenuItemBase):
     id: int
     restaurant_id: int
-    image: Optional[str] = None  # Contains the URL like "/uploads/xyz.jpg"
+    # NO IMAGE FIELD HERE
 
-    class Config:
-        # Allows Pydantic to read data from SQLAlchemy models
-        from_attributes = True 
-        # Note: If using an older version of Pydantic, use 'orm_mode = True' instead
+# 2. FULL Schema (For Details/Updates - WITH IMAGE)
+class MenuItemResponse(MenuItemLite):
+    image: Optional[str] = None
