@@ -27,62 +27,61 @@ const AuthPage = () => {
 
         try {
             if (isLogin) {
-                // --- LOGIN LOGIC ---
                 const data = new URLSearchParams();
                 data.append("username", formData.username.trim());
                 data.append("password", formData.password.trim());
 
-                // Pointing to your port 5000 backend via api service
                 const res = await api.post("/login", data, {
                     headers: { "Content-Type": "application/x-www-form-urlencoded" }
                 });
 
-                // SAVING DATA - Essential for the Profile page to work after refresh
-                sessionStorage.setItem("token", res.data.access_token);
-                sessionStorage.setItem("role", res.data.role);
-                sessionStorage.setItem("restaurant_id", res.data.restaurant_id);
-                sessionStorage.setItem("user_id", String(res.data.user_id));
+                // --- THE FIX: ROBUST ID CAPTURE ---
+                const token = res.data.access_token;
+                // Check every possible location for the user ID
+                const userId = res.data.user_id || res.data.user?.id || res.data.id;
 
-                if (res.data.username) {
-                    sessionStorage.setItem("username", res.data.username);
+                if (!token || !userId) {
+                    console.error("Missing Auth Data:", res.data);
+                    setError("Login failed: Invalid server response.");
+                    return;
                 }
 
-                // --- UPDATED NAVIGATION LOGIC ---
-                if (res.data.role === "admin") {
-                    navigate("/admin/dashboard");
-                } else if (res.data.role === "restaurant") {
-                    navigate("/restaurant/dashboard");
-                } else if (res.data.role === "driver") { // <--- ADDED THIS CHECK
-                    navigate("/rider/dashboard");
-                } else {
-                    navigate("/");
+                // SAVING DATA
+                sessionStorage.setItem("token", token);
+                sessionStorage.setItem("user_id", String(userId)); // Force to string
+                sessionStorage.setItem("role", res.data.role || "customer");
+
+                if (res.data.restaurant_id) {
+                    sessionStorage.setItem("restaurant_id", res.data.restaurant_id);
                 }
+                if (res.data.username || res.data.user?.username) {
+                    sessionStorage.setItem("username", res.data.username || res.data.user?.username);
+                }
+
+                // --- NAVIGATION ---
+                const role = res.data.role;
+                if (role === "admin") navigate("/admin/dashboard");
+                else if (role === "restaurant") navigate("/restaurant/dashboard");
+                else if (role === "driver") navigate("/rider/dashboard");
+                else navigate("/");
 
             } else {
-                // --- REGISTER LOGIC ---
-                try {
-                    await api.post("/register", {
-                        username: formData.username.trim(),
-                        full_name: formData.full_name.trim() || formData.username.trim(),
-                        email: formData.email.trim(),
-                        phone: formData.phone.trim(),
-                        password: formData.password.trim(),
-                        role: "customer",
-                        // Default Profile Image
-                        profile_image: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-                    });
-                    alert("Account created! Welcome to Crave. Please log in.");
-                    setIsLogin(true);
-                    setFormData({ username: "", full_name: "", password: "", email: "", phone: "", role: "customer" });
-                } catch (err) {
-                    setError(err.response?.data?.detail || "Signup failed. Try again.");
-                }
+                // ... (Register logic remains the same)
+                await api.post("/register", {
+                    username: formData.username.trim(),
+                    full_name: formData.full_name.trim() || formData.username.trim(),
+                    email: formData.email.trim(),
+                    phone: formData.phone.trim(),
+                    password: formData.password.trim(),
+                    role: "customer",
+                    profile_image: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+                });
+                alert("Account created! Please log in.");
+                setIsLogin(true);
             }
         } catch (err) {
             console.error(err);
-            const message = err.response?.data?.detail ||
-                (isLogin ? "Login failed. Check your credentials." : "Signup failed. Try again.");
-            setError(message);
+            setError(err.response?.data?.detail || "Action failed. Please try again.");
         }
     };
 

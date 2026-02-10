@@ -21,9 +21,6 @@
 # from app.models.restaurant_request import RestaurantRequest
 # from app.models.rider_request import RiderRequest
 # from app.schemas.rider_request import RiderRequestCreate
-# # app/main.py (Top)
-# from app.models.cart import Cart  # <--- Add this line
-# from app.models.user import Favorite # Ensure Favorite is imported
 
 # from app.schemas.user import UserCreate, UserUpdate, TokenResponse
 # from app.schemas.restaurant_request import RestaurantRequestCreate, RestaurantResponse
@@ -58,7 +55,8 @@
 
 # app.include_router(restaurant.router)
 # app.include_router(admin.router)
-# app.include_router(menu.router) 
+# app.include_router(menu.router)
+
 
 # # ---------------- HELPERS ----------------
 # def verify_password(plain, hashed): return pwd_context.verify(plain, hashed)
@@ -341,59 +339,70 @@
 #     name: str = Form(...), 
 #     email: str = Form(...), 
 #     address: str = Form(...),
+#     username: str = Form(...), 
 #     password: Optional[str] = Form(None), 
 #     profile_image: Optional[UploadFile] = File(None),
 #     db: Session = Depends(get_db), 
 #     res: Restaurant = Depends(get_current_restaurant)
 # ):
-#     # 1. Fetch the restaurant record and the corresponding user record
+#     # 1. Fetch records
 #     full_res = db.query(Restaurant).filter(Restaurant.id == res.id).first()
-#     # Find the user based on the restaurant's email to sync data
 #     user = db.query(User).filter(User.email == full_res.email).first()
     
-#     # 2. Update basic information in both tables
+#     if not full_res:
+#         raise HTTPException(status_code=404, detail="Restaurant record not found")
+
+#     # 2. Update text fields in both tables
 #     full_res.name = name
 #     full_res.email = email
 #     full_res.address = address
+    
 #     if user: 
 #         user.email = email
-#         user.full_name = name # Syncing name for consistency
+#         user.full_name = name 
+#         user.username = username 
 
-#     # 3. Handle Password Updates
-#     if password:
+#     # 3. Handle Password Updates & Set Custom Message
+#     update_msg = "Profile updated successfully" # Default message
+#     if password and password.strip():
 #         hashed = hash_password(password)
-#         full_res.password = hashed
-#         if user: 
+#         if user:
 #             user.hashed_password = hashed
+#         full_res.password = hashed
+#         # Update message to show password was changed
+#         update_msg = "Password and profile updated successfully"
 
-#     # 4. CRITICAL FIX: Update profile image in BOTH tables
+#     # 4. Handle Profile Image sync
 #     if profile_image:
 #         content = await profile_image.read()
-#         # Encode image to Base64
 #         encoded_image = f"data:{profile_image.content_type};base64,{base64.b64encode(content).decode('utf-8')}"
         
-#         # Update Restaurant table (affects Restaurant List)
 #         full_res.profile_image = encoded_image
-        
-#         # Update User table (affects Navbar/User Profile)
 #         if user:
 #             user.profile_image = encoded_image
 
-#     # 5. Commit changes to the database
 #     db.commit()
     
-#     # Background task for email remains the same
+#     # 5. Background task for email
 #     bg_tasks.add_task(
 #         send_update_email, 
 #         email, 
 #         name, 
-#         user.username if user else "Partner", 
+#         username, 
 #         address, 
 #         password, 
 #         full_res.profile_image
 #     )
     
-#     return {"message": "Restaurant profile and User account updated successfully"}
+#     # Return the specific message to the frontend
+#     return {
+#         "message": update_msg, 
+#         "username": username,
+#         "name": name,
+#         "email": email,
+#         "address": address,
+#         "profile_image": full_res.profile_image
+#     }
 
 # # ---------------- RIDER REGISTRATION LOGIC ----------------
 # @app.post("/api/rider-request")
@@ -418,127 +427,6 @@
 
 #     return {"message": "Rider Application Received!", "id": new_request.id}
 
-
-# # ==============================================================================
-# #  CART DATABASE MODEL & API
-# # ==============================================================================
-# from sqlalchemy import Column, Integer, ForeignKey
-# from sqlalchemy.orm import relationship
-
-# # 1. THE CART TABLE MODEL
-# class Cart(Base):
-#     __tablename__ = "carts"
-#     id = Column(Integer, primary_key=True, index=True)
-#     user_id = Column(Integer, ForeignKey("users.id"))
-#     menu_item_id = Column(Integer, ForeignKey("menu_items.id"))
-#     quantity = Column(Integer, default=1)
-    
-#     # Relationship to get Menu Item details (name, price, image)
-#     menu_item = relationship("MenuItem")
-
-# # Create the table
-# Base.metadata.create_all(bind=engine)
-
-# # 2. PYDANTIC SCHEMA FOR INPUT
-# class CartAdd(BaseModel):
-#     menu_item_id: int
-#     quantity: int # 1 to add, -1 to remove
-
-
-# # 3. GET CART API (Fetches data for the specific User ID)
-# @app.get("/api/cart")
-# def get_user_cart(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-#     # Fetch cart items for this specific user
-#     cart_items = db.query(Cart).filter(Cart.user_id == current_user["id"]).all()
-    
-#     # Return formatted list with menu details
-#     return [
-#         {
-#             "id": item.menu_item.id,
-#             "name": item.menu_item.name,
-#             "price": item.menu_item.price,
-#             "image": item.menu_item.image,
-#             "description": item.menu_item.description,
-#             "discount_price": item.menu_item.discount_price,
-#             "quantity": item.quantity,
-#             "cart_id": item.id
-#         }
-#         for item in cart_items if item.menu_item
-#     ]
-
-# # 4. ADD/UPDATE CART API
-# @app.post("/api/cart")
-# def update_cart_item(data: CartAdd, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-#     user_id = current_user["id"]
-    
-#     # Check if item is already in cart
-#     cart_item = db.query(Cart).filter(
-#         Cart.user_id == user_id, 
-#         Cart.menu_item_id == data.menu_item_id
-#     ).first()
-
-#     if cart_item:
-#         # Update quantity
-#         new_qty = cart_item.quantity + data.quantity
-#         if new_qty > 0:
-#             cart_item.quantity = new_qty
-#         else:
-#             # If quantity goes to 0, remove it
-#             db.delete(cart_item)
-#     elif data.quantity > 0:
-#         # Create new entry
-#         new_item = Cart(user_id=user_id, menu_item_id=data.menu_item_id, quantity=data.quantity)
-#         db.add(new_item)
-    
-#     db.commit()
-#     return {"message": "Cart updated"}
-
-#     # ==============================================================================
-# #  FAVORITES API
-# # ==============================================================================
-
-# # 1. GET USER'S FAVORITES (To show red hearts on load)
-# @app.get("/api/favorites")
-# def get_my_favorites(
-#     current_user: dict = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     # Returns a list of menu_item_ids that the user has liked
-#     favs = db.query(Favorite.menu_item_id).filter(Favorite.user_id == current_user["id"]).all()
-    
-#     # Convert list of tuples [(1,), (5,)] -> list of ints [1, 5]
-#     return [f[0] for f in favs]
-
-
-# @app.post("/api/favorites/{menu_item_id}")
-# def toggle_favorite(
-#     menu_item_id: int, 
-#     current_user: dict = Depends(get_current_user), 
-#     db: Session = Depends(get_db)
-# ):
-#     user_id = current_user["id"]
-    
-#     # Check if it already exists
-#     existing_fav = db.query(Favorite).filter(
-#         Favorite.user_id == user_id, 
-#         Favorite.menu_item_id == menu_item_id
-#     ).first()
-
-#     if existing_fav:
-#         # CONSTRAINT LOGIC: If found, delete it (Remove from favorites)
-#         db.delete(existing_fav)
-#         db.commit()
-#         return {"status": "removed", "item_id": menu_item_id}
-    
-#     else:
-#         # CONSTRAINT LOGIC: If not found, add it (Add to favorites)
-#         new_fav = Favorite(user_id=user_id, menu_item_id=menu_item_id)
-#         db.add(new_fav)
-#         db.commit()
-#         return {"status": "added", "item_id": menu_item_id}
-        
-        
-
 # if __name__ == "__main__":
 #     import uvicorn
 #     uvicorn.run(app, host="0.0.0.0", port=8000)
@@ -560,22 +448,24 @@ from pydantic import BaseModel
 # --- INTERNAL IMPORTS ---
 from app.db.session import engine, Base, get_db
 
-# 1. IMPORT MODELS
+# 1. Import Models
 from app.models.user import User, Restaurant, Favorite
 from app.models.menu import MenuItem 
 from app.models.restaurant_request import RestaurantRequest
 from app.models.rider_request import RiderRequest
-from app.models.cart import Cart  # <--- IMPORTED HERE, so we DO NOT define it again below
+from app.models.cart import Cart  # <--- ADDED IMPORT
 
-# 2. IMPORT SCHEMAS
+# 2. Import Schemas
 from app.schemas.rider_request import RiderRequestCreate
 from app.schemas.user import UserCreate, UserUpdate, TokenResponse
 from app.schemas.restaurant_request import RestaurantRequestCreate, RestaurantResponse
 
-# 3. IMPORT ROUTES
+# 3. Import Routes
 from app.routes import restaurant
 from app.routes import admin
 from app.routes import menu
+
+# --- EMAIL IMPORT ---
 from app.routes.admin import send_update_email
 
 load_dotenv()
@@ -596,12 +486,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create all tables (Safe to run)
 Base.metadata.create_all(bind=engine)
 
 app.include_router(restaurant.router)
 app.include_router(admin.router)
-app.include_router(menu.router) 
+app.include_router(menu.router)
+
 
 # ---------------- HELPERS ----------------
 def verify_password(plain, hashed): return pwd_context.verify(plain, hashed)
@@ -616,9 +506,11 @@ class UserProfileUpdate(BaseModel):
     profile_image: Optional[str] = None
     password: Optional[str] = None 
 
-class CartAdd(BaseModel):
+class CartAdd(BaseModel): # <--- ADDED MODEL
     menu_item_id: int
     quantity: int
+    customization: Optional[str] = "[]" # Receive addons
+    total_price: Optional[float] = 0.0
 
 # ==============================================================================
 #  AUTH DEPENDENCIES
@@ -646,7 +538,101 @@ def get_current_restaurant(
     return res
 
 # ==============================================================================
-#  MENU API HELPERS
+#  FAVORITES API (ORDERED TO FIX 405 ERROR)
+# ==============================================================================
+
+@app.get("/api/favorites/list") # <--- ADDED LIST ROUTE FIRST
+def get_favorites_list(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    fav_items = db.query(MenuItem).join(
+        Favorite, Favorite.menu_item_id == MenuItem.id
+    ).filter(
+        Favorite.user_id == current_user["id"]
+    ).all()
+    return format_items(fav_items)
+
+@app.get("/api/favorites")
+def get_user_favorites(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    favs = db.query(Favorite.menu_item_id).filter(Favorite.user_id == current_user["id"]).all()
+    return [f[0] for f in favs]
+
+@app.post("/api/favorites/{item_id}")
+def toggle_favorite(item_id: int, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    user_id = current_user["id"]
+    existing_fav = db.query(Favorite).filter(Favorite.user_id == user_id, Favorite.menu_item_id == item_id).first()
+
+    if existing_fav:
+        db.delete(existing_fav)
+        db.commit()
+        return {"status": "removed", "item_id": item_id}
+    else:
+        new_fav = Favorite(user_id=user_id, menu_item_id=item_id)
+        db.add(new_fav)
+        db.commit()
+        return {"status": "added", "item_id": item_id}
+
+# ==============================================================================
+#  CART API ROUTES (FIXES 404 ERROR)
+# ==============================================================================
+
+@app.get("/api/cart")
+def get_user_cart(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    cart_items = db.query(Cart).filter(Cart.user_id == current_user["id"]).all()
+    
+    return [
+        {
+            "id": item.menu_item.id,
+            "name": item.menu_item.name,
+            # RETURN THE SAVED CART PRICE, NOT THE MENU PRICE
+            "price": item.price if item.price > 0 else item.menu_item.price,
+            "image": item.menu_item.image,
+            "description": item.menu_item.description,
+            "quantity": item.quantity,
+            "cart_id": item.id,
+            "addons": item.addons # Return addons so frontend can display "Cheese: +10"
+        }
+        for item in cart_items if item.menu_item
+    ]
+
+@app.post("/api/cart")
+def update_cart_item(data: CartAdd, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    user_id = current_user["id"]
+    
+    # Calculate Unit Price (Total / Qty)
+    unit_price = 0
+    if data.total_price and data.quantity > 0:
+        unit_price = data.total_price / data.quantity
+
+    cart_item = db.query(Cart).filter(
+        Cart.user_id == user_id, 
+        Cart.menu_item_id == data.menu_item_id
+    ).first()
+
+    if cart_item:
+        # Update existing item
+        new_qty = cart_item.quantity + data.quantity
+        if new_qty > 0:
+            cart_item.quantity = new_qty
+            # Update price/addons if new ones are sent
+            if unit_price > 0: cart_item.price = unit_price
+            if data.customization: cart_item.addons = data.customization
+        else:
+            db.delete(cart_item)
+    elif data.quantity > 0:
+        # Create new item with custom price
+        new_item = Cart(
+            user_id=user_id, 
+            menu_item_id=data.menu_item_id, 
+            quantity=data.quantity,
+            price=unit_price, # Save the custom price (130)
+            addons=data.customization # Save the addons
+        )
+        db.add(new_item)
+    
+    db.commit()
+    return {"message": "Cart updated"}
+
+# ==============================================================================
+#  MENU API ENDPOINTS
 # ==============================================================================
 
 def format_items(items):
@@ -666,9 +652,7 @@ def format_items(items):
         for item in items
     ]
 
-# ==============================================================================
-#  RESTAURANT & RIDER REQUESTS
-# ==============================================================================
+# ---------------- RESTAURANT REGISTRATION LOGIC ----------------
 
 @app.post("/api/restaurant-request")
 def submit_restaurant_request(request: RestaurantRequestCreate, db: Session = Depends(get_db)):
@@ -688,31 +672,9 @@ def submit_restaurant_request(request: RestaurantRequestCreate, db: Session = De
     db.add(new_request)
     db.commit()
     db.refresh(new_request)
-    return {"message": "Application submitted successfully! Please wait for Admin approval.", "id": new_request.id}
+    return {"message": "Application submitted successfully!", "id": new_request.id}
 
-@app.post("/api/rider-request")
-def submit_rider_request(request: RiderRequestCreate, db: Session = Depends(get_db)):
-    if db.query(RiderRequest).filter(RiderRequest.email == request.email).first():
-        raise HTTPException(status_code=400, detail="Application with this email already exists.")
-    if db.query(User).filter(User.email == request.email).first():
-        raise HTTPException(status_code=400, detail="User with this email already exists.")
-
-    new_request = RiderRequest(
-        full_name=request.fullName,
-        email=request.email,
-        phone=request.phone,
-        city=request.city,
-        vehicle_type=request.vehicleType,
-        status="pending"
-    )
-    db.add(new_request)
-    db.commit()
-    db.refresh(new_request)
-    return {"message": "Rider Application Received!", "id": new_request.id}
-
-# ==============================================================================
-#  RESTAURANT LIST API
-# ==============================================================================
+# ---------------- RESTAURANT LIST API ----------------
 
 @app.get("/restaurants")
 def get_all_restaurants(db: Session = Depends(get_db)):
@@ -722,13 +684,8 @@ def get_all_restaurants(db: Session = Depends(get_db)):
         cats = db.query(MenuItem.category).filter(MenuItem.restaurant_id == r.id).distinct().limit(2).all()
         cuisine_str = " • ".join([c[0] for c in cats if c[0]]) if cats else "Multi-Cuisine" 
         response_data.append({
-            "id": r.id,
-            "name": r.name,
-            "address": r.address,
-            "rating": "4.5",
-            "is_active": r.is_active,
-            "profile_image": r.profile_image,
-            "cuisine": cuisine_str 
+            "id": r.id, "name": r.name, "address": r.address, "rating": "4.5",
+            "is_active": r.is_active, "profile_image": r.profile_image, "cuisine": cuisine_str 
         })
     return response_data
 
@@ -739,9 +696,9 @@ def get_restaurant_image(restaurant_id: int, db: Session = Depends(get_db)):
     try:
         img_str = res.profile_image
         if "base64," in img_str: _, img_str = img_str.split("base64,", 1)
-        image_data = base64.b64decode(img_str)
-        return Response(content=image_data, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000, immutable"})
-    except Exception: return Response(status_code=500)
+        return Response(content=base64.b64decode(img_str), media_type="image/jpeg", 
+                        headers={"Cache-Control": "public, max-age=31536000"})
+    except: return Response(status_code=500)
 
 @app.get("/restaurants/{restaurant_id}")
 def get_restaurant_detail(restaurant_id: int, db: Session = Depends(get_db)):
@@ -749,20 +706,16 @@ def get_restaurant_detail(restaurant_id: int, db: Session = Depends(get_db)):
     if not restaurant: raise HTTPException(status_code=404, detail="Restaurant not found")
     return restaurant
 
-# ==============================================================================
-#  USER PROFILE & AUTH
-# ==============================================================================
+# --- USER PROFILE ROUTES ---
 
 @app.get("/users/{user_id}")
 def get_user_profile(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user: raise HTTPException(status_code=404, detail="User not found")
-    
     profile_image = user.profile_image
     if user.role == "restaurant":
         res_data = db.query(Restaurant).filter(Restaurant.email == user.email).first()
         if res_data: profile_image = res_data.profile_image
-
     return {
         "id": user.id, "username": user.username, "full_name": user.full_name,
         "email": user.email, "phone": user.phone, "role": user.role, "profile_image": profile_image
@@ -772,23 +725,19 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)):
 def update_user_profile(user_id: int, data: UserProfileUpdate, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user: raise HTTPException(status_code=404, detail="User not found")
-
     if data.username: user.username = data.username
     if data.full_name: user.full_name = data.full_name
     if data.email: user.email = data.email
     if data.phone: user.phone = data.phone
     if data.profile_image: user.profile_image = data.profile_image
     if data.password: user.hashed_password = hash_password(data.password)
-
     db.commit()
-    db.refresh(user)
     return {"message": "Profile updated successfully"}
 
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == user.username).first(): raise HTTPException(400, "Username taken")
     if db.query(User).filter(User.email == user.email).first(): raise HTTPException(400, "Email registered")
-    
     new_user = User(
         username=user.username, full_name=user.full_name, email=user.email,
         phone=user.phone, hashed_password=hash_password(user.password),
@@ -803,113 +752,58 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     user = db.query(User).filter(User.username == form_data.username).options(defer(User.profile_image)).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(401, "Invalid credentials")
-
     restaurant_id = None
     if user.role == "restaurant":
-        res = db.query(Restaurant).filter(Restaurant.email == user.email).options(load_only(Restaurant.id)).first()
+        res = db.query(Restaurant).filter(Restaurant.email == user.email).first()
         if res: restaurant_id = res.id
-
     token = jwt.encode({
         "sub": user.username, "id": user.id, "role": user.role,
         "restaurant_id": restaurant_id, "exp": datetime.now(timezone.utc) + timedelta(hours=2)
     }, SECRET_KEY, algorithm=ALGORITHM)
+    return {"access_token": token, "token_type": "bearer", "role": user.role, 
+            "username": user.username, "user_id": user.id, "restaurant_id": restaurant_id}
 
-    return {"access_token": token, "token_type": "bearer", "role": user.role, "username": user.username, "user_id": user.id, "restaurant_id": restaurant_id}
+@app.get("/api/restaurant/me")
+def get_my_profile(res: Restaurant = Depends(get_current_restaurant), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == res.email).first()
+    return {
+        "id": res.id, "name": res.name, "email": res.email, "address": res.address,
+        "is_active": res.is_active, "profile_image": res.profile_image,
+        "username": user.username if user else None
+    }
 
-# ==============================================================================
-#  CART API (Using Imported Cart Model)
-# ==============================================================================
-
-@app.get("/api/cart")
-def get_user_cart(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Fetch cart items for this specific user
-    cart_items = db.query(Cart).filter(Cart.user_id == current_user["id"]).all()
-    
-    # Return formatted list with menu details
-    return [
-        {
-            "id": item.menu_item.id,
-            "name": item.menu_item.name,
-            "price": item.menu_item.price,
-            "image": item.menu_item.image,
-            "description": item.menu_item.description,
-            "discount_price": item.menu_item.discount_price,
-            "quantity": item.quantity,
-            "cart_id": item.id
-        }
-        for item in cart_items if item.menu_item
-    ]
-
-@app.post("/api/cart")
-def update_cart_item(data: CartAdd, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    user_id = current_user["id"]
-    
-    # Check if item is already in cart
-    cart_item = db.query(Cart).filter(
-        Cart.user_id == user_id, 
-        Cart.menu_item_id == data.menu_item_id
-    ).first()
-
-    if cart_item:
-        new_qty = cart_item.quantity + data.quantity
-        if new_qty > 0:
-            cart_item.quantity = new_qty
-        else:
-            db.delete(cart_item)
-    elif data.quantity > 0:
-        new_item = Cart(user_id=user_id, menu_item_id=data.menu_item_id, quantity=data.quantity)
-        db.add(new_item)
-    
+@app.put("/api/restaurant/update")
+async def update_restaurant_profile(
+    bg_tasks: BackgroundTasks, name: str = Form(...), email: str = Form(...), 
+    address: str = Form(...), username: str = Form(...), password: Optional[str] = Form(None), 
+    profile_image: Optional[UploadFile] = File(None), db: Session = Depends(get_db), 
+    res: Restaurant = Depends(get_current_restaurant)
+):
+    user = db.query(User).filter(User.email == res.email).first()
+    res.name, res.email, res.address = name, email, address
+    if user: user.email, user.full_name, user.username = email, name, username 
+    if password and password.strip():
+        hashed = hash_password(password)
+        if user: user.hashed_password = hashed
+        res.password = hashed
+    if profile_image:
+        content = await profile_image.read()
+        encoded = f"data:{profile_image.content_type};base64,{base64.b64encode(content).decode('utf-8')}"
+        res.profile_image = encoded
+        if user: user.profile_image = encoded
     db.commit()
-    return {"message": "Cart updated"}
+    bg_tasks.add_task(send_update_email, email, name, username, address, password, res.profile_image)
+    return {"message": "Profile updated", "profile_image": res.profile_image}
 
-# ==============================================================================
-#  FAVORITES API
-# ==============================================================================
-
-# 1. GET USER'S FAVORITES (To show red hearts)
-@app.get("/api/favorites")
-def get_my_favorites(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    favs = db.query(Favorite.menu_item_id).filter(Favorite.user_id == current_user["id"]).all()
-    return [f[0] for f in favs]
-
-# 2. GET FAVORITES LIST (For Drawer/TopBanner) - THIS WAS MISSING
-@app.get("/api/favorites/list")
-def get_favorites_list(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    fav_items = db.query(MenuItem).join(
-        Favorite, Favorite.menu_item_id == MenuItem.id
-    ).filter(
-        Favorite.user_id == current_user["id"]
-    ).all()
-    
-    return [
-        {
-            "id": item.id,
-            "name": item.name,
-            "price": item.price,
-            "image": item.image,
-            "description": item.description,
-            "discount_price": item.discount_price,
-            "isAvailable": item.is_available
-        }
-        for item in fav_items
-    ]
-
-# 3. TOGGLE FAVORITE
-@app.post("/api/favorites/{menu_item_id}")
-def toggle_favorite(menu_item_id: int, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    user_id = current_user["id"]
-    existing_fav = db.query(Favorite).filter(Favorite.user_id == user_id, Favorite.menu_item_id == menu_item_id).first()
-
-    if existing_fav:
-        db.delete(existing_fav)
-        db.commit()
-        return {"status": "removed", "item_id": menu_item_id}
-    else:
-        new_fav = Favorite(user_id=user_id, menu_item_id=menu_item_id)
-        db.add(new_fav)
-        db.commit()
-        return {"status": "added", "item_id": menu_item_id}
+@app.post("/api/rider-request")
+def submit_rider_request(request: RiderRequestCreate, db: Session = Depends(get_db)):
+    new_request = RiderRequest(
+        full_name=request.fullName, email=request.email, phone=request.phone,
+        city=request.city, vehicle_type=request.vehicleType, status="pending"
+    )
+    db.add(new_request)
+    db.commit()
+    return {"message": "Rider Application Received!"}
 
 if __name__ == "__main__":
     import uvicorn

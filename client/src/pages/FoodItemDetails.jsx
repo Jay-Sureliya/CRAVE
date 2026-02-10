@@ -1,351 +1,526 @@
+// import React, { useState, useEffect, useMemo } from "react";
+// import { useParams, useNavigate, useLocation } from "react-router-dom";
+// import { 
+//   ArrowLeft, Minus, Plus, Star, Clock, Flame, 
+//   Heart, Share2, Check, Loader2, ShoppingBag, 
+//   Utensils, Info, AlertCircle 
+// } from "lucide-react";
+// import { motion, AnimatePresence } from "framer-motion";
+// import api from "../services/api";
+
+// const FoodItemDetails = () => {
+//   const { id } = useParams();
+//   const navigate = useNavigate();
+//   const location = useLocation();
+
+//   // --- STATE ---
+//   const [item, setItem] = useState(location.state?.item || null);
+//   const [loading, setLoading] = useState(!location.state?.item);
+//   const [qty, setQty] = useState(1);
+//   const [isFav, setIsFav] = useState(false);
+
+//   // Customization State
+//   const [selectedAddons, setSelectedAddons] = useState(new Set());
+
+//   // --- FETCH DATA ---
+//   useEffect(() => {
+//     const fetchItemDetails = async () => {
+//       try {
+//         if (!item) setLoading(true);
+//         const response = await api.get(`/api/public/menu/item/${id}`);
+//         if (response.data) setItem(response.data);
+//       } catch (error) {
+//         console.error("Failed to fetch item:", error);
+//       } finally {
+//         setLoading(false);
+//       }
+//     };
+//     fetchItemDetails();
+//   }, [id]);
+
+//   // --- HELPERS ---
+//   const getImageUrl = (itm) => {
+//     if (!itm) return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
+//     if (itm.image && (itm.image.startsWith("data:") || itm.image.startsWith("http"))) return itm.image;
+//     return `http://localhost:8000/api/menu/image/${itm.id}`;
+//   };
+
+//   const availableAddons = useMemo(() => {
+//     if (!item || !item.addons) return [];
+//     if (typeof item.addons === 'string') {
+//         try { return JSON.parse(item.addons); } catch (e) { return []; }
+//     }
+//     return Array.isArray(item.addons) ? item.addons : [];
+//   }, [item]);
+
+//   const basePrice = item ? (item.discountPrice || item.discount_price || item.price) : 0;
+
+//   const totalPrice = useMemo(() => {
+//     let total = parseFloat(basePrice);
+//     selectedAddons.forEach(addonId => {
+//         const addon = availableAddons.find(a => a.id === addonId);
+//         if(addon) total += parseFloat(addon.price);
+//     });
+//     return total * qty;
+//   }, [basePrice, selectedAddons, availableAddons, qty]);
+
+//   // --- FIXED ADD TO CART ---
+//   const handleAddToCart = async () => {
+//     // 1. FIX: Check sessionStorage first (where your Login saves it)
+//     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+//     if (!token) {
+//         alert("Please sign in first!");
+//         return;
+//     }
+
+//     try {
+//         // 2. FIX: Explicitly pass the Authorization header
+//         await api.post("/api/cart", { 
+//             menu_item_id: item.id, 
+//             quantity: qty,
+//         }, {
+//             headers: { Authorization: `Bearer ${token}` }
+//         });
+
+//         // 3. Success Feedback
+//         window.dispatchEvent(new Event('cart-updated')); // Updates TopBanner count
+//         navigate(-1); // Go back to menu
+//     } catch (err) {
+//         console.error("Add to cart failed", err);
+//         if (err.response && err.response.status === 401) {
+//             alert("Session expired. Please login again.");
+//         } else {
+//             alert("Failed to add to cart");
+//         }
+//     }
+//   };
+
+//   const toggleAddon = (addonId) => {
+//     const next = new Set(selectedAddons);
+//     if (next.has(addonId)) next.delete(addonId);
+//     else next.add(addonId);
+//     setSelectedAddons(next);
+//   };
+
+//   if (loading || !item) return <div className="flex h-screen items-center justify-center bg-white"><Loader2 className="animate-spin text-orange-600" size={40} /></div>;
+
+//   return (
+//     <div className="min-h-screen bg-[#FDFBF7] font-sans text-slate-900 pb-24 md:pb-10 pt-20 md:pt-28 px-4 md:px-8">
+
+//       {/* --- BACK BUTTON --- */}
+//       <div className="max-w-6xl mx-auto mb-6">
+//         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-orange-600 transition-colors">
+//             <ArrowLeft size={18} /> Back to Menu
+//         </button>
+//       </div>
+
+//       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-16">
+
+//         {/* --- LEFT COLUMN: STICKY IMAGE --- */}
+//         <div className="relative h-fit md:sticky md:top-32">
+//             <motion.div 
+//                 initial={{ opacity: 0, scale: 0.95 }}
+//                 animate={{ opacity: 1, scale: 1 }}
+//                 className="relative rounded-[2.5rem] overflow-hidden shadow-2xl shadow-orange-900/10 aspect-square md:aspect-[4/3]"
+//             >
+//                 <img 
+//                     src={getImageUrl(item)} 
+//                     className="w-full h-full object-cover"
+//                     alt={item.name}
+//                 />
+//                 {/* Overlay Tags */}
+//                 <div className="absolute top-6 left-6 flex flex-col gap-2">
+//                     <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm border border-white/20 backdrop-blur-md ${item.is_veg ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+//                         {item.is_veg ? 'Veg' : 'Non-Veg'}
+//                     </span>
+//                     {item.discountPrice && (
+//                         <span className="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-orange-500 text-white shadow-sm border border-white/20 backdrop-blur-md">
+//                             Promo
+//                         </span>
+//                     )}
+//                 </div>
+//             </motion.div>
+//         </div>
+
+//         {/* --- RIGHT COLUMN: DETAILS & SCROLL --- */}
+//         <div className="flex flex-col">
+
+//             {/* Title & Stats */}
+//             <div className="border-b border-dashed border-slate-200 pb-6 mb-6">
+//                 <div className="flex justify-between items-start">
+//                     <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-tight mb-2">{item.name}</h1>
+//                     <button onClick={() => setIsFav(!isFav)} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+//                         <Heart size={24} className={isFav ? "fill-red-500 text-red-500" : "text-slate-400"} />
+//                     </button>
+//                 </div>
+
+//                 <p className="text-slate-500 leading-relaxed font-medium mb-4">{item.description}</p>
+
+//                 <div className="flex items-center gap-6 text-sm font-bold text-slate-600">
+//                     <div className="flex items-center gap-1.5"><Star size={16} className="fill-yellow-400 text-yellow-400" /> 4.5 Ratings</div>
+//                     <div className="w-1 h-1 bg-slate-300 rounded-full" />
+//                     <div className="flex items-center gap-1.5"><Clock size={16} /> 25 Mins</div>
+//                     <div className="w-1 h-1 bg-slate-300 rounded-full" />
+//                     <div className="flex items-center gap-1.5"><Flame size={16} className="text-orange-500" /> 320 Kcal</div>
+//                 </div>
+//             </div>
+
+//             {/* Price Block */}
+//             <div className="flex items-end gap-3 mb-8">
+//                 <span className="text-4xl font-black text-slate-900">₹{basePrice}</span>
+//                 {item.discountPrice && <span className="text-lg font-bold text-slate-400 line-through mb-1">₹{item.price}</span>}
+//             </div>
+
+//             {/* Customization */}
+//             {availableAddons.length > 0 && (
+//                 <div className="mb-10">
+//                     <div className="flex items-center gap-2 mb-4">
+//                         <Utensils size={18} className="text-orange-600" />
+//                         <h3 className="font-bold text-lg text-slate-800">Customize your meal</h3>
+//                     </div>
+
+//                     <div className="space-y-3">
+//                         {availableAddons.map(addon => {
+//                             const isSelected = selectedAddons.has(addon.id);
+//                             return (
+//                                 <motion.div 
+//                                     key={addon.id} 
+//                                     onClick={() => toggleAddon(addon.id)}
+//                                     whileTap={{ scale: 0.99 }}
+//                                     className={`group flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? 'border-orange-500 bg-orange-50/50' : 'border-white bg-white hover:border-orange-100 shadow-sm'}`}
+//                                 >
+//                                     <div className="flex items-center gap-4">
+//                                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 transition-colors ${isSelected ? "bg-orange-500 border-orange-500" : "border-slate-200 bg-slate-50"}`}>
+//                                             {isSelected && <Check size={14} className="text-white" strokeWidth={4} />}
+//                                         </div>
+//                                         <span className={`font-bold ${isSelected ? "text-slate-900" : "text-slate-600"}`}>{addon.name}</span>
+//                                     </div>
+//                                     <span className="text-sm font-bold text-slate-800">+ ₹{addon.price}</span>
+//                                 </motion.div>
+//                             )
+//                         })}
+//                     </div>
+//                 </div>
+//             )}
+
+//             {/* Note */}
+//             <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex gap-3 items-start mb-8">
+//                 <AlertCircle className="text-blue-500 shrink-0 mt-0.5" size={18} />
+//                 <p className="text-xs text-blue-900/70 font-bold leading-relaxed">
+//                     Allergies? Please contact the restaurant directly after placing your order to ensure your meal is prepared safely.
+//                 </p>
+//             </div>
+
+//             {/* --- ACTION AREA (Desktop: Static, Mobile: Fixed Bottom) --- */}
+//             <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-100 p-4 z-50 md:static md:bg-transparent md:border-none md:p-0">
+//                 <div className="max-w-6xl mx-auto flex items-center gap-4">
+//                     {/* Qty */}
+//                     <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl px-4 h-16 w-40 justify-between shadow-sm">
+//                         <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200 active:scale-95 transition-all"><Minus size={18}/></button>
+//                         <span className="font-black text-xl text-slate-900">{qty}</span>
+//                         <button onClick={() => setQty(qty + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 text-white rounded-xl hover:bg-black active:scale-95 transition-all"><Plus size={18}/></button>
+//                     </div>
+
+//                     {/* Add Button */}
+//                     <button onClick={handleAddToCart} className="flex-1 h-16 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-orange-500/30 active:scale-95 transition-all flex items-center justify-between px-8 hover:brightness-110">
+//                         <div className="flex flex-col items-start leading-none">
+//                             <span className="text-[10px] uppercase tracking-wider opacity-80 mb-1">Total</span>
+//                             <span>₹{totalPrice}</span>
+//                         </div>
+//                         <div className="flex items-center gap-2">
+//                             <span>Add to Cart</span>
+//                             <ShoppingBag size={20} />
+//                         </div>
+//                     </button>
+//                 </div>
+//             </div>
+
+//         </div>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default FoodItemDetails;
+
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { 
-  ArrowLeft, Minus, Plus, Star, Clock, Flame, Info, 
-  ShoppingBag, Heart, ChevronRight, Share2, Check 
+import {
+    ArrowLeft, Minus, Plus, Star, Clock, Flame,
+    Heart, Share2, Check, Loader2, ShoppingBag,
+    Utensils, Info, AlertCircle
 } from "lucide-react";
-import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
-
-// --- MOCK DATA FOR DEMO PURPOSES ---
-// In a real app, these would come from your API inside the item object
-const MOCK_SIZES = [
-  { id: "s", name: "Small", price: 0 },
-  { id: "m", name: "Medium", price: 40 },
-  { id: "l", name: "Large", price: 80 },
-];
-
-const MOCK_ADDONS = [
-  { id: "ex_cheese", name: "Extra Cheese", price: 30 },
-  { id: "ex_sauce", name: "Spicy Sauce", price: 15 },
-  { id: "coke", name: "Coke (250ml)", price: 40 },
-];
-
-const MOCK_REVIEWS = [
-  { id: 1, user: "Alex J.", rating: 5, text: "Absolutely delicious! The crust was perfect." },
-  { id: 2, user: "Sarah M.", rating: 4, text: "Great taste, but delivery was a bit slow." },
-];
+import { motion, AnimatePresence } from "framer-motion";
+import api from "../services/api";
 
 const FoodItemDetails = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { scrollY } = useScroll();
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const location = useLocation();
 
-  // --- STATE ---
-  const [item, setItem] = useState(location.state?.item || null);
-  const [qty, setQty] = useState(1); // Default to 1 for the "Add" flow
-  const [isFav, setIsFav] = useState(false);
-  const [activeTab, setActiveTab] = useState("details"); // details | nutrition | reviews
-  
-  // Customization State
-  const [selectedSize, setSelectedSize] = useState(MOCK_SIZES[0]);
-  const [selectedAddons, setSelectedAddons] = useState(new Set());
+    // --- STATE ---
+    const [item, setItem] = useState(location.state?.item || null);
+    const [loading, setLoading] = useState(!location.state?.item);
+    const [qty, setQty] = useState(1);
+    const [isFav, setIsFav] = useState(false);
 
-  // Parallax Effect for Header
-  const imageY = useTransform(scrollY, [0, 300], [0, 150]);
-  const headerOpacity = useTransform(scrollY, [200, 300], [0, 1]);
+    // Customization State
+    const [selectedAddons, setSelectedAddons] = useState(new Set());
 
-  // --- HELPER: Image URL ---
-  const getImageUrl = (itm) => {
-    if (!itm) return "";
-    if (itm.image && (itm.image.startsWith("data:") || itm.image.startsWith("http"))) return itm.image;
-    return `http://localhost:8000/api/menu/image/${itm.id}`;
-  };
+    // New State for Button Feedback
+    const [isAdding, setIsAdding] = useState(false);
+    const [isAdded, setIsAdded] = useState(false);
 
-  // --- LOGIC: Calculate Total Price ---
-  const basePrice = item ? (item.discountPrice || item.price) : 0;
-  
-  const totalPrice = useMemo(() => {
-    let total = basePrice;
-    total += selectedSize.price; // Add size price
-    selectedAddons.forEach(addonId => {
-        const addon = MOCK_ADDONS.find(a => a.id === addonId);
-        if(addon) total += addon.price;
-    });
-    return total * qty;
-  }, [basePrice, selectedSize, selectedAddons, qty]);
+    // --- FETCH DATA ---
+    useEffect(() => {
+        const fetchItemDetails = async () => {
+            try {
+                if (!item) setLoading(true);
+                const response = await api.get(`/api/public/menu/item/${id}`);
+                if (response.data) setItem(response.data);
+            } catch (error) {
+                console.error("Failed to fetch item:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchItemDetails();
+    }, [id]);
 
-  // --- LOGIC: Add to Cart ---
-  const handleAddToCart = () => {
-    const savedCart = JSON.parse(localStorage.getItem("myCart")) || [];
-    
-    // Create a unique ID for customized items so they don't merge incorrectly
-    const customId = `${item.id}-${selectedSize.id}-${Array.from(selectedAddons).join('-')}`;
-    
-    const newItem = {
-      ...item,
-      id: customId, // Override ID to allow duplicates with different options
-      originalId: item.id,
-      name: `${item.name} (${selectedSize.name})`,
-      price: (basePrice + selectedSize.price), // Update unit price
-      selectedAddons: Array.from(selectedAddons), // Save addon IDs
-      image: getImageUrl(item),
-      quantity: qty,
-      finalPrice: totalPrice // Store total for reference
+    // --- HELPERS ---
+    const getImageUrl = (itm) => {
+        if (!itm) return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
+        if (itm.image && (itm.image.startsWith("data:") || itm.image.startsWith("http"))) return itm.image;
+        return `http://localhost:8000/api/menu/image/${itm.id}`;
     };
 
-    // Check if exactly this customization exists
-    const existingIndex = savedCart.findIndex(i => i.id === customId);
-    
-    let updatedCart;
-    if (existingIndex > -1) {
-      updatedCart = [...savedCart];
-      updatedCart[existingIndex].quantity += qty;
-    } else {
-      updatedCart = [...savedCart, newItem];
-    }
+    const availableAddons = useMemo(() => {
+        if (!item || !item.addons) return [];
+        if (typeof item.addons === 'string') {
+            try { return JSON.parse(item.addons); } catch (e) { return []; }
+        }
+        return Array.isArray(item.addons) ? item.addons : [];
+    }, [item]);
 
-    localStorage.setItem("myCart", JSON.stringify(updatedCart));
-    navigate(-1); // Go back
-  };
+    const basePrice = item ? (item.discountPrice || item.discount_price || item.price) : 0;
 
-  // Toggle Addon
-  const toggleAddon = (addonId) => {
-    const next = new Set(selectedAddons);
-    if (next.has(addonId)) next.delete(addonId);
-    else next.add(addonId);
-    setSelectedAddons(next);
-  };
+    // Calculate Unit Price (Base + Addons)
+    const unitPrice = useMemo(() => {
+        let price = parseFloat(basePrice);
+        selectedAddons.forEach(addonId => {
+            const addon = availableAddons.find(a => a.id === addonId);
+            if (addon) price += parseFloat(addon.price);
+        });
+        return price;
+    }, [basePrice, selectedAddons, availableAddons]);
 
-  // Fallback Redirect
-  useEffect(() => {
-    if (!item) {
-      navigate(-1); 
-    }
-  }, [item, navigate]);
+    // Calculate Grand Total
+    const totalPrice = unitPrice * qty;
 
-  if (!item) return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    // --- FIXED: ADD TO CART ---
+    // --- FIXED ADD TO CART LOGIC ---
+    const handleAddToCart = async () => {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
-  return (
-    <div className="min-h-screen bg-stone-50 pb-32 font-sans">
-      
-      {/* --- FLOATING HEADER ACTIONS --- */}
-      <div className="fixed top-0 inset-x-0 z-50 flex justify-between items-center p-4">
-        <motion.div style={{ opacity: headerOpacity }} className="absolute inset-0 bg-white shadow-sm" />
-        <button onClick={() => navigate(-1)} className="relative z-10 p-3 bg-white/80 backdrop-blur-md rounded-full shadow-lg text-stone-800 hover:bg-white active:scale-95 transition-all">
-          <ArrowLeft size={20} />
-        </button>
-        <div className="flex gap-3">
-            <button className="relative z-10 p-3 bg-white/80 backdrop-blur-md rounded-full shadow-lg text-stone-800 hover:bg-white active:scale-95 transition-all">
-                <Share2 size={20} />
-            </button>
-            <button onClick={() => setIsFav(!isFav)} className="relative z-10 p-3 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white active:scale-95 transition-all">
-                <Heart size={20} className={isFav ? "fill-red-500 text-red-500" : "text-stone-800"} />
-            </button>
-        </div>
-      </div>
+        if (!token) {
+            alert("Please sign in first!");
+            return;
+        }
 
-      {/* --- PARALLAX IMAGE --- */}
-      <div className="relative h-[45vh] w-full overflow-hidden">
-        <motion.img 
-          style={{ y: imageY }}
-          src={getImageUrl(item)} 
-          className="w-full h-full object-cover"
-          alt={item.name}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 to-transparent" />
-      </div>
+        try {
+            // Calculate total price for ONE item (Base + Addons)
+            // We send this so the backend knows the customized price
+            let itemCustomPrice = parseFloat(basePrice);
+            selectedAddons.forEach(addonId => {
+                const addon = availableAddons.find(a => a.id === addonId);
+                if (addon) itemCustomPrice += parseFloat(addon.price);
+            });
 
-      {/* --- MAIN CONTENT CARD --- */}
-      <div className="relative -mt-12 bg-stone-50 rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] overflow-hidden">
-        
-        {/* Title Section */}
-        <div className="p-6 pb-2 bg-white">
-            <div className="w-12 h-1 bg-stone-200 rounded-full mx-auto mb-6" />
-            
-            <div className="flex justify-between items-start gap-4">
-                <h1 className="text-3xl font-black text-stone-800 leading-tight">{item.name}</h1>
-                <div className="flex flex-col items-end flex-shrink-0">
-                    <span className="text-3xl font-black text-orange-600 tracking-tight">₹{basePrice}</span>
-                </div>
-            </div>
-            
-            <p className="mt-2 text-stone-500 text-sm leading-relaxed">{item.description}</p>
-            
-            {/* Quick Stats */}
-            <div className="flex items-center gap-4 mt-6 py-4 border-y border-stone-100 overflow-x-auto no-scrollbar">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 rounded-full">
-                    <Star size={14} className="fill-orange-500 text-orange-500" />
-                    <span className="text-xs font-bold text-orange-800">4.8 (120+)</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 rounded-full">
-                    <Clock size={14} className="text-green-600" />
-                    <span className="text-xs font-bold text-green-800">25 min</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 rounded-full">
-                    <Flame size={14} className="text-red-500" />
-                    <span className="text-xs font-bold text-red-800">{item.calories || 350} kcal</span>
-                </div>
-            </div>
-        </div>
+            await api.post("/api/cart", {
+                menu_item_id: item.id,
+                quantity: qty,
+                // Send the custom price per unit (if your backend supports it)
+                // Or rely on the backend to recalculate based on addons if you send them
+                // For now, we will send the addons list so you can store it
+                customization: JSON.stringify(Array.from(selectedAddons)),
+                total_price: itemCustomPrice * qty // Optional: depends on backend
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        {/* --- TABS --- */}
-        <div className="flex p-1 mx-6 mt-6 bg-stone-200/50 rounded-xl relative">
-            {["details", "nutrition", "reviews"].map((tab) => (
-                <button 
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wide rounded-lg z-10 transition-colors ${activeTab === tab ? "text-stone-800" : "text-stone-400"}`}
-                >
-                    {tab}
+            // 1. Update Cart Badge
+            window.dispatchEvent(new Event('cart-updated'));
+
+            // 2. Show Success Feedback (instead of redirecting)
+            alert("Item added to cart!");
+
+            // 3. REMOVED: navigate(-1);  <-- This line caused the redirect
+
+        } catch (err) {
+            console.error("Add to cart failed", err);
+            if (err.response && err.response.status === 401) {
+                alert("Session expired. Please login again.");
+            } else {
+                alert("Failed to add to cart");
+            }
+        }
+    };
+
+    const toggleAddon = (addonId) => {
+        const next = new Set(selectedAddons);
+        if (next.has(addonId)) next.delete(addonId);
+        else next.add(addonId);
+        setSelectedAddons(next);
+    };
+
+    if (loading || !item) return <div className="flex h-screen items-center justify-center bg-white"><Loader2 className="animate-spin text-orange-600" size={40} /></div>;
+
+    return (
+        <div className="min-h-screen bg-[#FDFBF7] font-sans text-slate-900 pb-24 md:pb-10 pt-20 md:pt-28 px-4 md:px-8">
+
+            {/* --- BACK BUTTON --- */}
+            <div className="max-w-6xl mx-auto mb-6">
+                <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-orange-600 transition-colors">
+                    <ArrowLeft size={18} /> Back to Menu
                 </button>
-            ))}
-            {/* Animated Tab Background */}
-            <motion.div 
-                animate={{ x: activeTab === "details" ? "0%" : activeTab === "nutrition" ? "100%" : "200%" }}
-                className="absolute top-1 left-1 bottom-1 w-[32%] bg-white shadow-sm rounded-lg"
-            />
-        </div>
+            </div>
 
-        {/* --- DYNAMIC CONTENT AREA --- */}
-        <div className="p-6 min-h-[300px]">
-            <AnimatePresence mode="wait">
-                
-                {activeTab === "details" && (
-                    <motion.div 
-                        key="details"
-                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                        className="space-y-8"
+            <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-16">
+
+                {/* --- LEFT COLUMN: STICKY IMAGE --- */}
+                <div className="relative h-fit md:sticky md:top-32">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="relative rounded-[2.5rem] overflow-hidden shadow-2xl shadow-orange-900/10 aspect-square md:aspect-[4/3]"
                     >
-                        {/* Size Selection */}
-                        <div className="space-y-3">
-                            <h3 className="font-bold text-stone-800 text-lg">Choose Size</h3>
-                            <div className="space-y-2">
-                                {MOCK_SIZES.map(size => (
-                                    <div 
-                                        key={size.id} 
-                                        onClick={() => setSelectedSize(size)}
-                                        className={`flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer ${selectedSize.id === size.id ? "bg-orange-50 border-orange-500 ring-1 ring-orange-500" : "bg-white border-stone-100 hover:border-stone-300"}`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedSize.id === size.id ? "border-orange-500" : "border-stone-300"}`}>
-                                                {selectedSize.id === size.id && <div className="w-2.5 h-2.5 bg-orange-500 rounded-full" />}
-                                            </div>
-                                            <span className={`font-medium ${selectedSize.id === size.id ? "text-stone-800" : "text-stone-500"}`}>{size.name}</span>
-                                        </div>
-                                        <span className="text-sm font-bold text-stone-800">{size.price === 0 ? "Free" : `+ ₹${size.price}`}</span>
-                                    </div>
-                                ))}
-                            </div>
+                        <img
+                            src={getImageUrl(item)}
+                            className="w-full h-full object-cover"
+                            alt={item.name}
+                        />
+                        {/* Overlay Tags */}
+                        <div className="absolute top-6 left-6 flex flex-col gap-2">
+                            <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm border border-white/20 backdrop-blur-md ${item.is_veg ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                                {item.is_veg ? 'Veg' : 'Non-Veg'}
+                            </span>
+                            {item.discountPrice && (
+                                <span className="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-orange-500 text-white shadow-sm border border-white/20 backdrop-blur-md">
+                                    Promo
+                                </span>
+                            )}
+                        </div>
+                    </motion.div>
+                </div>
+
+                {/* --- RIGHT COLUMN: DETAILS --- */}
+                <div className="flex flex-col">
+
+                    {/* Title & Stats */}
+                    <div className="border-b border-dashed border-slate-200 pb-6 mb-6">
+                        <div className="flex justify-between items-start">
+                            <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-tight mb-2">{item.name}</h1>
                         </div>
 
-                        {/* Add-ons */}
-                        <div className="space-y-3">
-                            <h3 className="font-bold text-stone-800 text-lg">Add-ons</h3>
-                            <div className="space-y-2">
-                                {MOCK_ADDONS.map(addon => {
+                        <p className="text-slate-500 leading-relaxed font-medium mb-4">{item.description}</p>
+
+                        <div className="flex items-center gap-6 text-sm font-bold text-slate-600">
+                            <div className="flex items-center gap-1.5"><Star size={16} className="fill-yellow-400 text-yellow-400" /> 4.5 Ratings</div>
+                            <div className="w-1 h-1 bg-slate-300 rounded-full" />
+                            <div className="flex items-center gap-1.5"><Clock size={16} /> 25 Mins</div>
+                            <div className="w-1 h-1 bg-slate-300 rounded-full" />
+                            <div className="flex items-center gap-1.5"><Flame size={16} className="text-orange-500" /> 320 Kcal</div>
+                        </div>
+                    </div>
+
+                    {/* Price Block */}
+                    <div className="flex items-end gap-3 mb-8">
+                        <span className="text-4xl font-black text-slate-900">₹{basePrice}</span>
+                        {item.discountPrice && <span className="text-lg font-bold text-slate-400 line-through mb-1">₹{item.price}</span>}
+                    </div>
+
+                    {/* Customization */}
+                    {availableAddons.length > 0 && (
+                        <div className="mb-10">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Utensils size={18} className="text-orange-600" />
+                                <h3 className="font-bold text-lg text-slate-800">Customize your meal</h3>
+                            </div>
+
+                            <div className="space-y-3">
+                                {availableAddons.map(addon => {
                                     const isSelected = selectedAddons.has(addon.id);
                                     return (
-                                        <div 
-                                            key={addon.id} 
+                                        <motion.div
+                                            key={addon.id}
                                             onClick={() => toggleAddon(addon.id)}
-                                            className={`flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer ${isSelected ? "bg-stone-800 border-stone-800 text-white" : "bg-white border-stone-100 hover:border-stone-300"}`}
+                                            whileTap={{ scale: 0.99 }}
+                                            className={`group flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? 'border-orange-500 bg-orange-50/50' : 'border-white bg-white hover:border-orange-100 shadow-sm'}`}
                                         >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${isSelected ? "border-white bg-white" : "border-stone-300"}`}>
-                                                    {isSelected && <Check size={12} className="text-stone-900" />}
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 transition-colors ${isSelected ? "bg-orange-500 border-orange-500" : "border-slate-200 bg-slate-50"}`}>
+                                                    {isSelected && <Check size={14} className="text-white" strokeWidth={4} />}
                                                 </div>
-                                                <span className={`font-medium ${isSelected ? "text-white" : "text-stone-500"}`}>{addon.name}</span>
+                                                <span className={`font-bold ${isSelected ? "text-slate-900" : "text-slate-600"}`}>{addon.name}</span>
                                             </div>
-                                            <span className={`text-sm font-bold ${isSelected ? "text-orange-400" : "text-stone-800"}`}>+ ₹{addon.price}</span>
-                                        </div>
+                                            <span className="text-sm font-bold text-slate-800">+ ₹{addon.price}</span>
+                                        </motion.div>
                                     )
                                 })}
                             </div>
                         </div>
-                    </motion.div>
-                )}
+                    )}
 
-                {activeTab === "nutrition" && (
-                    <motion.div 
-                        key="nutrition"
-                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                        className="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm"
-                    >
-                        <h3 className="font-bold text-stone-800 mb-4">Nutritional Facts <span className="text-xs font-normal text-stone-400">(per serving)</span></h3>
-                        <div className="space-y-4">
-                            <div className="flex justify-between py-3 border-b border-stone-100">
-                                <span className="text-stone-500">Protein</span>
-                                <span className="font-bold text-stone-800">12g</span>
+                    {/* Note */}
+                    <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex gap-3 items-start mb-8">
+                        <AlertCircle className="text-blue-500 shrink-0 mt-0.5" size={18} />
+                        <p className="text-xs text-blue-900/70 font-bold leading-relaxed">
+                            Allergies? Please contact the restaurant directly after placing your order to ensure your meal is prepared safely.
+                        </p>
+                    </div>
+
+                    {/* --- ACTION AREA --- */}
+                    <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-100 p-4 z-50 md:static md:bg-transparent md:border-none md:p-0">
+                        <div className="max-w-6xl mx-auto flex items-center gap-4">
+                            {/* Qty */}
+                            <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl px-4 h-16 w-40 justify-between shadow-sm">
+                                <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200 active:scale-95 transition-all"><Minus size={18} /></button>
+                                <span className="font-black text-xl text-slate-900">{qty}</span>
+                                <button onClick={() => setQty(qty + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 text-white rounded-xl hover:bg-black active:scale-95 transition-all"><Plus size={18} /></button>
                             </div>
-                            <div className="flex justify-between py-3 border-b border-stone-100">
-                                <span className="text-stone-500">Carbohydrates</span>
-                                <span className="font-bold text-stone-800">45g</span>
-                            </div>
-                            <div className="flex justify-between py-3 border-b border-stone-100">
-                                <span className="text-stone-500">Fat</span>
-                                <span className="font-bold text-stone-800">18g</span>
-                            </div>
-                            <div className="p-4 bg-orange-50 rounded-xl mt-4">
-                                <p className="text-xs text-orange-800 leading-relaxed">
-                                    <span className="font-bold">Allergens:</span> Contains gluten, dairy, and soy. Prepared in a facility that handles nuts.
-                                </p>
-                            </div>
+
+                            {/* Add Button */}
+                            <button
+                                onClick={handleAddToCart}
+                                disabled={isAdding}
+                                className={`flex-1 h-16 rounded-2xl font-bold text-lg shadow-xl shadow-orange-500/30 active:scale-95 transition-all flex items-center justify-between px-8 
+                        ${isAdded ? 'bg-green-600 text-white' : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:brightness-110'}`}
+                            >
+                                {isAdding ? (
+                                    <div className="w-full flex justify-center"><Loader2 className="animate-spin" /></div>
+                                ) : isAdded ? (
+                                    <div className="w-full flex justify-center items-center gap-2"><Check /> Added!</div>
+                                ) : (
+                                    <>
+                                        <div className="flex flex-col items-start leading-none">
+                                            <span className="text-[10px] uppercase tracking-wider opacity-80 mb-1">Total</span>
+                                            <span>₹{totalPrice}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span>Add to Cart</span>
+                                            <ShoppingBag size={20} />
+                                        </div>
+                                    </>
+                                )}
+                            </button>
                         </div>
-                    </motion.div>
-                )}
+                    </div>
 
-                {activeTab === "reviews" && (
-                     <motion.div 
-                        key="reviews"
-                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                        className="space-y-4"
-                     >
-                        {MOCK_REVIEWS.map(review => (
-                            <div key={review.id} className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="font-bold text-stone-800">{review.user}</span>
-                                    <div className="flex text-orange-400">
-                                        {[...Array(5)].map((_,i) => (
-                                            <Star key={i} size={12} className={i < review.rating ? "fill-current" : "text-stone-200"} />
-                                        ))}
-                                    </div>
-                                </div>
-                                <p className="text-stone-500 text-sm leading-relaxed">{review.text}</p>
-                            </div>
-                        ))}
-                        <button className="w-full py-3 text-sm font-bold text-orange-600 border border-orange-200 rounded-xl hover:bg-orange-50 transition-colors">
-                            Read all 45 reviews
-                        </button>
-                     </motion.div>
-                )}
-
-            </AnimatePresence>
-        </div>
-      </div>
-
-      {/* --- STICKY ACTION BAR --- */}
-      <div className="fixed bottom-0 inset-x-0 bg-white border-t border-stone-100 p-4 pb-6 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] z-40">
-        <div className="max-w-xl mx-auto flex gap-4">
-           {/* Qty Controller */}
-           <div className="flex items-center gap-4 bg-stone-100 rounded-2xl px-5 h-14">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-stone-600 hover:bg-stone-50 active:scale-90 transition">
-                <Minus size={16}/>
-              </button>
-              <span className="font-black text-lg w-4 text-center text-stone-800">{qty}</span>
-              <button onClick={() => setQty(qty + 1)} className="w-8 h-8 flex items-center justify-center bg-stone-800 text-white rounded-lg shadow-sm hover:bg-stone-700 active:scale-90 transition">
-                <Plus size={16}/>
-              </button>
-           </div>
-
-           {/* Add Button */}
-           <button 
-             onClick={handleAddToCart}
-             className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white h-14 rounded-2xl font-bold text-lg shadow-lg shadow-orange-500/30 active:scale-95 transition-all flex items-center justify-between px-6 group"
-           >
-             <span className="flex items-center gap-2 text-sm font-medium opacity-90">Add to Cart</span>
-             <div className="flex items-center gap-2">
-                <span className="text-xl">₹{totalPrice}</span>
-                <div className="bg-white/20 p-1 rounded-lg group-hover:translate-x-1 transition-transform">
-                    <ChevronRight size={18} />
                 </div>
-             </div>
-           </button>
+            </div>
         </div>
-      </div>
-
-    </div>
-  );
+    );
 };
 
 export default FoodItemDetails;

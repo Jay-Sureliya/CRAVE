@@ -1,38 +1,31 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { User, Mail, Phone, LogOut, Save, Edit2, Camera, MapPin, Loader2 } from "lucide-react";
 import api from "../services/api";
-import {
-  Edit2, Check, X, LogOut, Camera, Home,
-  User as UserIcon, Mail, Phone, ShieldCheck,
-  Fingerprint, Lock, Key
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 
 const Profile = () => {
   const navigate = useNavigate();
-  const [isEditing, setIsEditing] = useState(false);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // User State
-  const [user, setUser] = useState({
-    username: "",
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // Form State
+  const [formData, setFormData] = useState({
     full_name: "",
+    username: "",
     email: "",
     phone: "",
-    profile_image: "",
-    role: ""
+    profile_image: ""
   });
 
-  // Password State (Only sent if changed)
-  const [passwords, setPasswords] = useState({
-    newPassword: "",
-    confirmPassword: ""
-  });
-
+  // --- 1. FETCH DATA (With Auto-Logout Fix) ---
   useEffect(() => {
     const fetchProfile = async () => {
+      // Robust Token Check
       const userId = sessionStorage.getItem("user_id");
-      if (!userId || userId === "undefined") {
+      const token =  sessionStorage.getItem("token");
+
+      if (!token || !userId) {
         navigate("/login");
         return;
       }
@@ -40,241 +33,159 @@ const Profile = () => {
       try {
         const res = await api.get(`/users/${userId}`);
         setUser(res.data);
-        setLoading(false);
+        setFormData({
+          full_name: res.data.full_name || "",
+          username: res.data.username || "",
+          email: res.data.email || "",
+          phone: res.data.phone || "",
+          profile_image: res.data.profile_image || ""
+        });
       } catch (err) {
-        console.error("Refresh sync failed:", err);
-        navigate("/login");
+        console.error("Profile sync failed:", err);
+        
+        // --- THE FIX: Auto-Logout on 404 ---
+        if (err.response && (err.response.status === 404 || err.response.status === 401)) {
+            alert("Session expired or user not found. Logging out.");
+            localStorage.clear();
+            sessionStorage.clear();
+            navigate("/login");
+        }
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchProfile();
   }, [navigate]);
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.src = reader.result;
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 400;
-          const scaleSize = MAX_WIDTH / img.width;
-          canvas.width = MAX_WIDTH;
-          canvas.height = img.height * scaleSize;
-
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
-          setUser({ ...user, profile_image: compressedBase64 });
-        };
-      };
-      reader.readAsDataURL(file);
-    }
+  // --- HANDLERS ---
+  const handleLogout = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    navigate("/login");
   };
 
   const handleSave = async () => {
-    const userId = sessionStorage.getItem("user_id");
-
-    // Password Validation
-    if (passwords.newPassword && passwords.newPassword !== passwords.confirmPassword) {
-      alert("❌ Passwords do not match!");
-      return;
-    }
-
-    const payload = {
-      username: user?.username?.trim(),
-      full_name: user?.full_name,
-      email: user?.email,
-      phone: user?.phone,
-      profile_image: user?.profile_image,
-      password: passwords.newPassword || undefined // Only send if set
-    };
-
     try {
-      const res = await api.put(`/users/${userId}`, payload);
-
-      if (res.status === 200) {
-        sessionStorage.setItem("username", user.username);
-        setIsEditing(false);
-        setPasswords({ newPassword: "", confirmPassword: "" }); // Reset passwords
-        alert("Profile updated successfully! ✅");
-      }
+      const userId = user.id;
+      // Optimistic Update
+      setUser({ ...user, ...formData });
+      setIsEditing(false);
+      
+      await api.put(`/users/${userId}`, formData);
+      alert("Profile Updated Successfully!");
     } catch (err) {
-      const errorMessage = err.response?.data?.detail;
-      if (errorMessage === "Username already taken") {
-        alert("❌ This username is already in use.");
-      } else {
-        console.error("Save failed:", errorMessage);
-        alert(`❌ Update failed: ${errorMessage || "Check console"}`);
-      }
+      console.error("Update failed", err);
+      alert("Failed to update profile.");
     }
   };
 
-  if (loading) return (
-    <div className="h-screen bg-white flex flex-col items-center justify-center">
-      <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Loading Profile</p>
-    </div>
-  );
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-orange-500" /></div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-10 font-sans text-slate-900">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-5xl bg-white rounded-[3rem] border border-slate-200 shadow-2xl overflow-hidden flex flex-col md:flex-row relative z-10"
-      >
-
-        {/* --- LEFT SIDE: Sidebar --- */}
-        <div className="md:w-80 bg-orange-500 p-8 flex flex-col items-center text-center">
-          <div className="relative group mt-8">
-            <div className="relative">
-              <img
-                src={user.profile_image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"}
-                alt="Profile"
-                className="w-40 h-40 rounded-[2.5rem] object-cover border-4 border-white shadow-2xl bg-white"
+    <div className="min-h-screen bg-stone-50 pt-20 pb-10 px-4">
+      <div className="max-w-2xl mx-auto bg-white rounded-[2rem] shadow-xl overflow-hidden border border-stone-100">
+        
+        {/* HEADER */}
+        <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-orange-500/20 to-transparent opacity-50" />
+          
+          <div className="relative z-10">
+            <div className="w-28 h-28 mx-auto bg-white rounded-full p-1 shadow-2xl mb-4 relative group">
+              <img 
+                src={formData.profile_image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"} 
+                alt="Profile" 
+                className="w-full h-full rounded-full object-cover"
               />
-              <AnimatePresence>
-                {isEditing && (
-                  <motion.label
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="absolute -bottom-2 -right-2 bg-white text-orange-500 p-3 rounded-2xl cursor-pointer hover:bg-slate-100 transition-all shadow-xl border border-orange-100 flex items-center justify-center"
-                  >
-                    <Camera size={20} />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleImageChange}
-                    />
-                  </motion.label>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          <div className="mt-8 space-y-1 text-white">
-            <h2 className="text-2xl font-black tracking-tight">{user.username}</h2>
-            <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-widest border border-white/30">
-              <ShieldCheck size={12} /> {user.role || 'User'}
-            </div>
-          </div>
-
-          <div className="mt-auto pt-10 w-full space-y-3">
-            <button
-              onClick={() => navigate("/")}
-              className="w-full flex items-center justify-center gap-2 bg-white text-orange-500 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-orange-50 transition-all shadow-lg active:scale-95"
-            >
-              <Home size={18} /> Home
-            </button>
-
-            <button
-              onClick={() => { sessionStorage.clear(); navigate("/login"); }}
-              className="w-full flex items-center justify-center gap-2 bg-orange-600/50 text-white/90 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-orange-700 transition-all border border-white/20 active:scale-95"
-            >
-              <LogOut size={18} /> Logout
-            </button>
-          </div>
-        </div>
-
-        {/* --- RIGHT SIDE: Content --- */}
-        <div className="flex-1 p-8 sm:p-14 bg-white overflow-y-auto max-h-[90vh] custom-scrollbar">
-          <div className="flex justify-between items-end mb-12">
-            <div>
-              <p className="text-orange-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">My Account</p>
-              <h1 className="text-4xl font-black text-slate-800">Profile Settings</h1>
-            </div>
-
-            <div className="flex gap-3">
-              {isEditing ? (
-                <div className="flex gap-2">
-                  <button onClick={handleSave} className="p-4 bg-green-500 text-white rounded-2xl hover:bg-green-600 shadow-lg transition-all"><Check size={20} /></button>
-                  <button onClick={() => { setIsEditing(false); setPasswords({ newPassword: "", confirmPassword: "" }); }} className="p-4 bg-slate-100 text-slate-500 rounded-2xl hover:bg-slate-200 transition-all"><X size={20} /></button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-8 py-4 bg-orange-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                >
-                  <Edit2 size={16} /> Edit Profile
+              {isEditing && (
+                <button className="absolute bottom-0 right-0 bg-orange-500 text-white p-2 rounded-full shadow-md hover:scale-110 transition-transform">
+                  <Camera size={16} />
                 </button>
               )}
             </div>
+            <h1 className="text-2xl font-black text-white tracking-wide">{user?.full_name || "Guest User"}</h1>
+            <p className="text-stone-400 text-sm font-medium tracking-widest uppercase mt-1">{user?.role || "Customer"}</p>
+          </div>
+        </div>
+
+        {/* DETAILS FORM */}
+        <div className="p-8 space-y-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-stone-800">Personal Details</h2>
+            <button 
+              onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${isEditing ? "bg-green-500 text-white hover:bg-green-600" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}
+            >
+              {isEditing ? <><Save size={16} /> Save</> : <><Edit2 size={16} /> Edit</>}
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
-            <InputGroup label="Username" value={user.username} isEditing={isEditing} icon={<Fingerprint size={18} />} onChange={(v) => setUser({ ...user, username: v })} />
-            <InputGroup label="Full Name" value={user.full_name} isEditing={isEditing} icon={<UserIcon size={18} />} onChange={(v) => setUser({ ...user, full_name: v })} />
-            <InputGroup label="Email Address" value={user.email} isEditing={isEditing} icon={<Mail size={18} />} onChange={(v) => setUser({ ...user, email: v })} />
-            <InputGroup label="Phone Number" value={user.phone} isEditing={isEditing} icon={<Phone size={18} />} onChange={(v) => setUser({ ...user, phone: v })} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-stone-400 uppercase ml-1">Full Name</label>
+              <div className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${isEditing ? "bg-white border-orange-500 shadow-orange-100 ring-2 ring-orange-100" : "bg-stone-50 border-transparent"}`}>
+                <User size={18} className="text-stone-400" />
+                <input 
+                  disabled={!isEditing}
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                  className="bg-transparent w-full outline-none text-stone-800 font-bold disabled:text-stone-600"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-stone-400 uppercase ml-1">Username</label>
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-stone-50 border border-transparent">
+                <span className="text-stone-400 font-bold">@</span>
+                <input 
+                  disabled
+                  value={formData.username}
+                  className="bg-transparent w-full outline-none text-stone-500 font-medium cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-stone-400 uppercase ml-1">Email Address</label>
+              <div className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${isEditing ? "bg-white border-orange-500" : "bg-stone-50 border-transparent"}`}>
+                <Mail size={18} className="text-stone-400" />
+                <input 
+                  disabled={!isEditing}
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="bg-transparent w-full outline-none text-stone-800 font-bold disabled:text-stone-600"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-stone-400 uppercase ml-1">Phone Number</label>
+              <div className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${isEditing ? "bg-white border-orange-500" : "bg-stone-50 border-transparent"}`}>
+                <Phone size={18} className="text-stone-400" />
+                <input 
+                  disabled={!isEditing}
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className="bg-transparent w-full outline-none text-stone-800 font-bold disabled:text-stone-600"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* PASSWORD SECTION (Only visible when editing) */}
-          <AnimatePresence>
-            {isEditing && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="border-t border-slate-100 pt-8 mt-8"
-              >
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-orange-50 rounded-xl text-orange-500"><Key size={20} /></div>
-                  <h3 className="text-xl font-bold text-slate-800">Change Password</h3>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                  <InputGroup
-                    label="New Password"
-                    value={passwords.newPassword}
-                    isEditing={true}
-                    icon={<Lock size={18} />}
-                    type="password"
-                    placeholder="Enter new password"
-                    onChange={(v) => setPasswords({ ...passwords, newPassword: v })}
-                  />
-                  <InputGroup
-                    label="Confirm Password"
-                    value={passwords.confirmPassword}
-                    isEditing={true}
-                    icon={<Check size={18} />}
-                    type="password"
-                    placeholder="Confirm new password"
-                    onChange={(v) => setPasswords({ ...passwords, confirmPassword: v })}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className="pt-6 border-t border-stone-100">
+             <button 
+               onClick={handleLogout}
+               className="w-full py-4 bg-red-50 text-red-500 font-bold rounded-2xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+             >
+                <LogOut size={20} /> Sign Out
+             </button>
+          </div>
 
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };
-
-const InputGroup = ({ label, value, isEditing, icon, onChange, type = "text", placeholder }) => (
-  <div className="flex flex-col gap-2 group">
-    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-orange-500">{label}</label>
-    <div className={`flex items-center gap-4 px-6 py-5 rounded-2xl border transition-all ${isEditing ? 'bg-white border-orange-500 shadow-md ring-4 ring-orange-50' : 'bg-slate-50 border-slate-100 hover:border-orange-200'}`}>
-      <span className={isEditing ? 'text-orange-500' : 'text-slate-400'}>{icon}</span>
-      {isEditing ? (
-        <input
-          type={type}
-          className="bg-transparent w-full text-sm font-bold outline-none text-slate-800 placeholder-slate-300"
-          value={value || ""}
-          placeholder={placeholder || ""}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <span className="text-sm font-bold text-slate-700">{value || "Not Set"}</span>
-      )}
-    </div>
-  </div>
-);
 
 export default Profile;
