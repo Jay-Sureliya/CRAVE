@@ -154,7 +154,10 @@ const RestaurantDashboard = () => {
         data.append("name", formData.name);
         data.append("email", formData.email);
         data.append("address", formData.address);
-        if (formData.username && formData.username !== userData.username) data.append("username", formData.username);
+
+        // FIX 1: Always append username to avoid 422 error
+        data.append("username", formData.username);
+
         if (formData.password) data.append("password", formData.password);
         if (selectedFile) data.append("profile_image", selectedFile);
 
@@ -166,31 +169,32 @@ const RestaurantDashboard = () => {
                 body: data
             });
 
+            const result = await response.json(); // Use a generic name for the response object
+
             if (response.ok) {
-                const updatedUser = await response.json();
                 setImageError(false);
 
                 setUserData(prev => ({
                     ...prev,
-                    username: updatedUser.username,
-                    name: updatedUser.name,
-                    email: updatedUser.email,
-                    address: updatedUser.address,
-                    profile_image: formatImageUrl(updatedUser.profile_image)
+                    username: result.username,
+                    name: result.name,
+                    email: result.email,
+                    address: result.address,
+                    profile_image: formatImageUrl(result.profile_image)
                 }));
 
-                alert("Profile updated successfully!");
+                // FIX 2: Alert the specific 'message' string from backend to avoid [object Object]
+                alert(result.message);
                 setIsEditModalOpen(false);
             } else {
-                const err = await response.json();
-                alert(err.detail || "Failed to update profile.");
+                // FIX 3: Also handle error messages correctly
+                alert(result.detail || "Failed to update profile.");
             }
         } catch (error) {
             console.error("Update error:", error);
             alert("Something went wrong");
         }
     };
-
     return (
         <>
             <style>{`
