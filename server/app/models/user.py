@@ -2,6 +2,8 @@ from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey
 from sqlalchemy.orm import relationship 
 from app.db.session import Base
 
+# ... keep your existing imports ...
+
 # 1. USER
 class User(Base):
     __tablename__ = "users"

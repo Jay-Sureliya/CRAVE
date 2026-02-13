@@ -9,10 +9,22 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      sessionStorage.clear();
-      window.location.href = "/login";
+    // 1. Check if the error is a 401 (Unauthorized)
+    if (error.response && error.response.status === 401) {
+      
+      // 2. CHECK: Is this error coming from the login request itself?
+      // We check if the request URL includes '/login'
+      const isLoginRequest = error.config.url.includes('/login');
+
+      // 3. Only trigger the logout/reload if it is NOT a login request
+      if (!isLoginRequest) {
+        sessionStorage.clear();
+        // window.location.reload(); // Or redirect to auth
+        window.location.href = '/auth';
+      }
     }
+    
+    // 4. Always reject the error so your AuthPage catch block receives it
     return Promise.reject(error);
   }
 );
