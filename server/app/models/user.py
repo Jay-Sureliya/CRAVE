@@ -2,26 +2,6 @@ from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey
 from sqlalchemy.orm import relationship 
 from app.db.session import Base
 
-# 1. USER
-# class User(Base):
-#     __tablename__ = "users"
-
-#     id = Column(Integer, primary_key=True, index=True)
-#     username = Column(String, unique=True, index=True)
-#     full_name = Column(String)
-#     email = Column(String, unique=True, index=True)
-#     phone = Column(String)
-#     hashed_password = Column(String)
-#     role = Column(String, default="customer")
-
-#     rider_profile = relationship("Rider", back_populates="user", uselist=False)
-    
-#     profile_image = Column(
-#         Text, 
-#         default="https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
-#         server_default="https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-#     )
-
 class User(Base):
     __tablename__ = "users"
 
