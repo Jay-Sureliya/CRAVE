@@ -168,7 +168,7 @@
 
 //         formData.append("type", newItem.type);
 //         formData.append("isAvailable", newItem.isAvailable.toString());
-        
+
 //         // --- SEND ADDONS AS JSON STRING ---
 //         formData.append("addons", JSON.stringify(newItem.addons));
 
@@ -325,7 +325,7 @@
 //                             <h3 className="text-2xl font-bold">{isEditing ? "Edit Item" : "Add New Item"}</h3>
 //                             <button onClick={() => setShowModal(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-full"><X size={20} /></button>
 //                         </div>
-                        
+
 //                         <div className="p-8 grid grid-cols-1 md:grid-cols-12 gap-10">
 //                             {/* Left Col: Image & Type */}
 //                             <div className="md:col-span-5 space-y-6">
@@ -371,7 +371,7 @@
 //                                 {/* --- CUSTOMIZATION SECTION --- */}
 //                                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
 //                                     <h4 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><ListPlus size={16}/> Personalize / Add-ons</h4>
-                                    
+
 //                                     {/* List Existing Addons */}
 //                                     <div className="space-y-2 mb-4">
 //                                         {newItem.addons.map((addon) => (
@@ -459,7 +459,7 @@ const RestaurantMenu = () => {
         type: "veg",
         isAvailable: true,
         image: null,
-        addons: [] 
+        addons: []
     };
     const [newItem, setNewItem] = useState(initialFormState);
     const [previewImage, setPreviewImage] = useState(null);
@@ -537,7 +537,7 @@ const RestaurantMenu = () => {
             type: item.is_veg ? "veg" : "non-veg",
             isAvailable: item.isAvailable,
             image: null,
-            addons: Array.isArray(parsedAddons) ? parsedAddons : [] 
+            addons: Array.isArray(parsedAddons) ? parsedAddons : []
         });
 
         setPreviewImage(getImageUrl(item));
@@ -563,10 +563,10 @@ const RestaurantMenu = () => {
 
     const addAddon = () => {
         if (!tempAddon.name || !tempAddon.price) return;
-        const newAddonObj = { 
-            id: Date.now(), 
-            name: tempAddon.name, 
-            price: parseFloat(tempAddon.price) 
+        const newAddonObj = {
+            id: Date.now(),
+            name: tempAddon.name,
+            price: parseFloat(tempAddon.price)
         };
         setNewItem({ ...newItem, addons: [...newItem.addons, newAddonObj] });
         setTempAddon({ name: "", price: "" });
@@ -631,7 +631,7 @@ const RestaurantMenu = () => {
     // --- FIXED DELETE HANDLER ---
     const handleDelete = async (id) => {
         if (!window.confirm("Delete this item?")) return;
-        
+
         try {
             const { headers } = getAuthData();
             const response = await fetch(`http://localhost:8000/api/menu/${id}`, {
@@ -761,7 +761,7 @@ const RestaurantMenu = () => {
                             <h3 className="text-2xl font-bold">{isEditing ? "Edit Item" : "Add New Item"}</h3>
                             <button onClick={() => setShowModal(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-full"><X size={20} /></button>
                         </div>
-                        
+
                         <div className="p-8 grid grid-cols-1 md:grid-cols-12 gap-10">
                             {/* Left Col: Image & Type */}
                             <div className="md:col-span-5 space-y-6">
@@ -806,8 +806,8 @@ const RestaurantMenu = () => {
 
                                 {/* --- CUSTOMIZATION SECTION --- */}
                                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                                    <h4 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><ListPlus size={16}/> Personalize / Add-ons</h4>
-                                    
+                                    <h4 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><ListPlus size={16} /> Personalize / Add-ons</h4>
+
                                     {/* List Existing Addons */}
                                     <div className="space-y-2 mb-4">
                                         {newItem.addons.map((addon) => (
@@ -823,19 +823,19 @@ const RestaurantMenu = () => {
 
                                     {/* Input New Addon */}
                                     <div className="flex gap-2">
-                                        <input 
-                                            type="text" 
-                                            placeholder="Ex: Extra Cheese" 
+                                        <input
+                                            type="text"
+                                            placeholder="Ex: Extra Cheese"
                                             value={tempAddon.name}
-                                            onChange={(e) => setTempAddon({...tempAddon, name: e.target.value})}
-                                            className="flex-1 px-4 py-3 bg-white rounded-xl text-sm font-bold outline-none border border-slate-200 focus:border-orange-500" 
+                                            onChange={(e) => setTempAddon({ ...tempAddon, name: e.target.value })}
+                                            className="flex-1 px-4 py-3 bg-white rounded-xl text-sm font-bold outline-none border border-slate-200 focus:border-orange-500"
                                         />
-                                        <input 
-                                            type="number" 
-                                            placeholder="₹ Price" 
+                                        <input
+                                            type="number"
+                                            placeholder="₹ Price"
                                             value={tempAddon.price}
-                                            onChange={(e) => setTempAddon({...tempAddon, price: e.target.value})}
-                                            className="w-24 px-4 py-3 bg-white rounded-xl text-sm font-bold outline-none border border-slate-200 focus:border-orange-500" 
+                                            onChange={(e) => setTempAddon({ ...tempAddon, price: e.target.value })}
+                                            className="w-24 px-4 py-3 bg-white rounded-xl text-sm font-bold outline-none border border-slate-200 focus:border-orange-500"
                                         />
                                         <button type="button" onClick={addAddon} className="bg-slate-900 text-white p-3 rounded-xl hover:bg-orange-600 transition-colors"><Plus size={20} /></button>
                                     </div>

@@ -49,3 +49,16 @@ class RestaurantResponse(RestaurantBase):
     id: int
     profile_image: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+class OrderCreate(BaseModel):
+    address: str
+    payment_method: str # "COD" or "Online"
+    # We calculate total and items from the backend using the Cart to be safe
+
+class OrderStatusUpdate(BaseModel):
+    status: str # "accepted", "preparing", "ready", "out_for_delivery", "delivered"
+
+class PaymentVerification(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom"; 
+import { useNavigate, useLocation } from "react-router-dom";
 import { MapPin, ShoppingBasket, Navigation, X, CheckCircle2, Heart, AlertCircle, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../services/api";
@@ -13,11 +13,10 @@ const Toast = ({ message, type = "success" }) => (
         initial={{ opacity: 0, y: -50, scale: 0.9 }}
         animate={{ opacity: 1, y: 20, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-3 rounded-full shadow-2xl backdrop-blur-md border ${
-            type === "neutral" 
-            ? "bg-stone-800 text-white border-stone-700" 
+        className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-3 rounded-full shadow-2xl backdrop-blur-md border ${type === "neutral"
+            ? "bg-stone-800 text-white border-stone-700"
             : "bg-stone-900/90 text-white border-white/10"
-        }`}
+            }`}
     >
         {type === "success" ? <CheckCircle size={18} className="text-green-400" /> : <AlertCircle size={18} className="text-yellow-400" />}
         <span className="font-medium text-sm">{message}</span>
@@ -32,7 +31,7 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
     const [location, setLocation] = useState(localStorage.getItem("user_location") || "Select Location");
     const [manualLocation, setManualLocation] = useState("");
     const [coords, setCoords] = useState({ lat: 51.5074, lng: -0.1278 });
-    
+
     // Auth & Data States
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isCartOpen, setIsCartOpen] = useState(false);
@@ -72,7 +71,7 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
     // --- DATA FETCHING ---
     const fetchCartData = async () => {
         const token = getToken();
-        if (!token) return; 
+        if (!token) return;
 
         try {
             const res = await api.get("/api/cart", {
@@ -80,7 +79,7 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
             });
             setCartItems(res.data);
             setIsAuthenticated(true); // We know we are logged in if this succeeds
-        } catch (err) { 
+        } catch (err) {
             if (err.response && (err.response.status === 401 || err.response.status === 403)) {
                 handleLogout();
             }
@@ -97,7 +96,7 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
             });
             setFavItems(res.data);
             setIsAuthenticated(true);
-        } catch (err) { 
+        } catch (err) {
             if (err.response && (err.response.status === 401 || err.response.status === 403)) {
                 handleLogout();
             }
@@ -107,7 +106,7 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
     // --- EFFECTS ---
     useEffect(() => {
         const token = getToken();
-        
+
         // 1. Immediate UI update based on token existence
         if (token) {
             setIsAuthenticated(true);
@@ -130,13 +129,13 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
         // 3. Event Listeners
         window.addEventListener('cart-updated', fetchCartData);
         window.addEventListener('fav-updated', fetchFavData);
-        
+
         return () => {
             clearInterval(intervalId);
             window.removeEventListener('cart-updated', fetchCartData);
             window.removeEventListener('fav-updated', fetchFavData);
         };
-    }, [locationHook.pathname]); 
+    }, [locationHook.pathname]);
 
     // --- HANDLERS ---
     const handleOpenCart = () => {
@@ -150,9 +149,9 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
 
     const handleUpdateCart = async (itemId, delta) => {
         const token = getToken();
-        if(!token) {
-             showToast("Sign in first", "neutral");
-             return;
+        if (!token) {
+            showToast("Sign in first", "neutral");
+            return;
         }
 
         try {
@@ -161,14 +160,14 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
             });
             fetchCartData();
             window.dispatchEvent(new Event('cart-updated'));
-        } catch (err) { 
+        } catch (err) {
             if (err.response && err.response.status === 401) handleLogout();
         }
     };
 
     const handleRemoveFav = async (itemId) => {
         const token = getToken();
-        if(!token) return;
+        if (!token) return;
 
         try {
             await api.post(`/api/favorites/${itemId}`, {}, {
@@ -177,7 +176,7 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
             fetchFavData();
             window.dispatchEvent(new Event('fav-updated'));
             showToast("Removed from Favorites", "neutral");
-        } catch (err) { 
+        } catch (err) {
             if (err.response && err.response.status === 401) handleLogout();
         }
     };
@@ -241,8 +240,8 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
 
                 <div className="flex h-full">
                     {/* FAVORITES BUTTON - FIX: Check getToken() directly */}
-                    <div 
-                        onClick={() => getToken() ? setIsFavOpen(true) : showToast("Sign in first", "neutral")} 
+                    <div
+                        onClick={() => getToken() ? setIsFavOpen(true) : showToast("Sign in first", "neutral")}
                         className="flex items-center justify-center px-5 h-full cursor-pointer hover:bg-slate-200 border-l border-slate-200 transition-colors relative group"
                     >
                         <Heart className="w-6 h-6 text-slate-500 group-hover:text-red-500 transition-colors" />
@@ -306,7 +305,7 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
                 onClose={() => setIsCartOpen(false)}
                 cartItems={cartItems}
                 onUpdate={handleUpdateCart}
-                isGuest={!isAuthenticated} 
+                isGuest={!isAuthenticated}
             />
 
             <FavoritesDrawer
