@@ -153,13 +153,13 @@ const Navbar = () => {
                     ) : (
                         <button
                             onClick={() => navigate("/login")}
-                            className="cursor-pointer flex items-center gap-4 bg-[#03081F] text-white px-8 py-4 rounded-full font-bold text-base hover:bg-slate-900 transition-all shadow-xl hover:scale-[1.02] active:scale-95"
+                            className="cursor-pointer flex items-center gap-4 bg-[#03081F] text-white px-3.5 py-2.5 rounded-full font-bold text-base hover:bg-slate-900 transition-all shadow-xl hover:scale-[1.02] active:scale-95"
                         >
-                            <div className="bg-orange-500 rounded-full p-1.5">
-                                <User className="w-5 h-5 text-black fill-black" />
+                            <div className="bg-orange-500 rounded-full p-2">
+                                <User className="w-4 h-4 text-black fill-black" />
                             </div>
                             Login / Signup
-                        </button>
+                        </button> 
                     )}
                 </div>
 
