@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
 import Navbar from "./Navbar";
+import Footer from "./Footer";
 
 const Layout = ({ children }) => {
   const location = useLocation();
@@ -23,6 +24,15 @@ const Layout = ({ children }) => {
       <main className={`relative w-full bg-white ${!hideHeader ? 'pt-[120px]' : ''}`}>
         {children}
       </main>
+
+
+      <main className={`relative w-full bg-white flex-grow ${!hideHeader ? 'pt-[120px]' : ''}`}>
+        {children}
+      </main>
+
+      {/* Footer */}
+      {/* 3. Call the Footer here, hiding it on admin pages same as the header */}
+      {!hideHeader && <Footer />}
     </>
   );
 };

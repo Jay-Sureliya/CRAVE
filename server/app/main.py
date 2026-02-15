@@ -27,11 +27,13 @@ from app.models.menu import MenuItem
 from app.models.restaurant_request import RestaurantRequest
 from app.models.rider_request import RiderRequest
 from app.models.cart import Cart  # <--- ADDED IMPORT
+from app.models.contact import ContactInquiry
 
 # 2. Import Schemas
 from app.schemas.rider_request import RiderRequestCreate
 from app.schemas.user import UserCreate, UserUpdate, TokenResponse
 from app.schemas.restaurant_request import RestaurantRequestCreate, RestaurantResponse
+from app.schemas.contact import ContactSchema
 
 # 3. Import Routes
 from app.routes import restaurant
@@ -40,6 +42,7 @@ from app.routes import menu
 
 # --- EMAIL IMPORT ---
 from app.routes.admin import send_update_email
+from app.utils.email import send_admin_reply_email, send_auto_acknowledgment
 
 load_dotenv()
 
@@ -542,6 +545,76 @@ def reset_password(
 
     return {"message": "Password reset successfully"}
 
+
+
+class AdminReplyRequest(BaseModel):
+    reply_message: str
+
+# --- 1. USER SUBMITS FORM (Updated) ---
+@app.post("/api/contact")
+def submit_contact(
+    data: ContactSchema, 
+    background_tasks: BackgroundTasks, 
+    db: Session = Depends(get_db)
+):
+    # Save to DB
+    new_entry = ContactInquiry(
+        name=data.name, 
+        email=data.email, 
+        message=data.message,
+        status="pending" # Default status
+    )
+    db.add(new_entry)
+    db.commit()
+    db.refresh(new_entry)
+
+    # Send "We received your message" email immediately
+    background_tasks.add_task(send_auto_acknowledgment, data.email, data.name)
+
+    return {"message": "Message received. Check your email!"}
+
+
+# --- 2. ADMIN GETS ALL MESSAGES ---
+@app.get("/api/admin/messages")
+def get_all_inquiries(db: Session = Depends(get_db)):
+    try:
+        # Fetch messages sorted by newest first
+        messages = db.query(ContactInquiry).order_by(ContactInquiry.created_at.desc()).all()
+        return messages
+    except Exception as e:
+        print(f"❌ Error fetching messages: {e}")
+        # This will show the actual error in your browser console instead of just "500"
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- 3. ADMIN REPLIES TO MESSAGE ---
+@app.post("/api/admin/reply/{inquiry_id}")
+def reply_to_inquiry(
+    inquiry_id: int, 
+    reply_data: AdminReplyRequest, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    # Find the message
+    inquiry = db.query(ContactInquiry).filter(ContactInquiry.id == inquiry_id).first()
+    if not inquiry:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+
+    # Update DB
+    inquiry.admin_reply = reply_data.reply_message
+    inquiry.status = "replied"
+    inquiry.replied_at = datetime.utcnow()
+    db.commit()
+
+    # Send the actual reply email
+    background_tasks.add_task(
+        send_admin_reply_email, 
+        inquiry.email, 
+        inquiry.name, 
+        inquiry.message, 
+        reply_data.reply_message
+    )
+
+    return {"message": "Reply sent successfully"}
 
 @app.put("/api/restaurant/update")
 async def update_restaurant_profile(

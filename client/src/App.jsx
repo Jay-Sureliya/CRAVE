@@ -1,13 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
-import Navbar from "./components/Navbar.jsx";
 import Login from "./pages/login/login.jsx";
 import Home from "./pages/Home.jsx";
 import About from "./pages/About.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import RestaurantDashboard from "./pages/restaurant/RestaurantDashboard";
-import Restaurant from "./pages/Restaurant.jsx";
-import SpecialOffer from "./pages/SpecialOffer.jsx";
 import TrackOrder from "./pages/TrackOrder.jsx";
 import MainLayout from "./components/MainLayout.jsx";
 import Profile from "./pages/Profile.jsx";
@@ -15,6 +12,7 @@ import RestaurantsList from "./pages/RestaurantsList.jsx";
 import RestaurantDetails from "./pages/RestaurantDetails.jsx";
 import RiderDashboard from "./pages/RiderDashboard.jsx";
 import FoodItemDetails from "./pages/FoodItemDetails.jsx";
+import ContactUs from "./pages/ContactUs.jsx";
 
 // --- PLACEHOLDERS ---
 const OrderFood = () => <div className="p-20 text-center text-2xl">🍔 Customer Menu (Order Now Page)</div>;
@@ -42,7 +40,7 @@ function App() {
           <Route path="/" element={<Home />} />
           {/* <Route path="/home"  */}
           <Route path="/about" element={<About />} />
-          <Route path="/special-offer" element={<SpecialOffer />} />
+          <Route path="/Contact-us" element={<ContactUs />} />
 
           {/* Public Restaurant Listing */}
           <Route path="/rest" element={<RestaurantsList />} />

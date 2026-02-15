@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Navbar from "./Navbar"; // This Navbar contains TopBanner
+import Footer from "./Footer";
 
 const MainLayout = () => {
   // --- STATE LIFTED UP ---
@@ -18,6 +19,8 @@ const MainLayout = () => {
       </main>
       
       {/* <Footer /> */}
+      <Footer />
+      
     </div>
   );
 };
