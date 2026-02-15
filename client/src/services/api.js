@@ -5,12 +5,37 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// 🔐 Attach token automatically to EVERY request
+// --- 1. REQUEST INTERCEPTOR (Attach Token) ---
+api.interceptors.request.use(
+  (config) => {
+    // Check both Local Storage and Session Storage
+    let token = localStorage.getItem("token") || sessionStorage.getItem("token");
+
+    if (token) {
+      // Remove any extra quotes that might have been saved by JSON.stringify
+      token = token.replace(/^"|"$/g, '');
+
+      // Attach the token to the header
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// --- 2. RESPONSE INTERCEPTOR (Handle Errors) ---
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // If the token is invalid or expired (401 Unauthorized)
     // 1. Check if the error is a 401 (Unauthorized)
     if (error.response && error.response.status === 401) {
+      console.warn("Session expired or invalid token.");
+
+      // Clear all storage to prevent loop
       
       // 2. CHECK: Is this error coming from the login request itself?
       // We check if the request URL includes '/login'
@@ -19,8 +44,13 @@ api.interceptors.response.use(
       // 3. Only trigger the logout/reload if it is NOT a login request
       if (!isLoginRequest) {
         sessionStorage.clear();
-        // window.location.reload(); // Or redirect to auth
+      localStorage.clear();
+
+      // Redirect to login only if not already there
+      if (window.location.pathname !== "/login") {
+          // window.location.reload(); // Or redirect to auth
         window.location.href = '/auth';
+      }
       }
     }
     

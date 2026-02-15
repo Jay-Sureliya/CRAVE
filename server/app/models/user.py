@@ -4,7 +4,8 @@ from app.db.session import Base
 
 # ... keep your existing imports ...
 
-# 1. USER
+# ... keep your existing imports ...
+
 class User(Base):
     __tablename__ = "users"
 
@@ -15,14 +16,18 @@ class User(Base):
     phone = Column(String)
     hashed_password = Column(String)
     role = Column(String, default="customer")
+    
+    # --- NEW COLUMN FOR ADDRESS ---
+    # This stores the full readable text: "Area, Rajkot, Gujarat, 360005"
+    address = Column(Text, nullable=True) 
 
-    rider_profile = relationship("Rider", back_populates="user", uselist=False)
+    rider = relationship("Rider", back_populates="user", uselist=False)
     
     profile_image = Column(
         Text, 
-        default="https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
-        server_default="https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+        default="https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
     )
+
 
 # 2. RESTAURANT
 class Restaurant(Base):
@@ -47,3 +52,7 @@ class Favorite(Base):
     # Composite Primary Key prevents duplicate likes
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
     menu_item_id = Column(Integer, ForeignKey("menu_items.id"), primary_key=True)
+
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Float, DateTime, Text, JSON
+from sqlalchemy.orm import relationship
+from datetime import datetime

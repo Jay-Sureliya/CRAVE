@@ -1,5 +1,5 @@
 import React from 'react';
-import b1 from '/b1.png';
+import b1 from '/b1.png'; // Make sure these paths match your project structure
 import b2 from '/b2.png';
 import b3 from '/b3.png';
 import Recommended from '../components/Recommended';
@@ -8,9 +8,12 @@ import PopularBrand from '../components/PopularBrand';
 import Ad from '../components/ad';
 import Partner from '../components/partner';
 
+// --- IMPORT THE TRACKER ---
+import OrderTracker from '../components/OrderTracker';
+
 const Home = () => {
     return (
-        <div className="font-sans text-slate-900 overflow-x-hidden bg-white flex flex-col items-center justify-center">
+        <div className="font-sans text-slate-900 overflow-x-hidden bg-white flex flex-col items-center justify-center relative">
 
             {/* --- MAIN HERO CONTAINER --- */}
             <main className="relative w-[95%] bg-[#F9F9F9] rounded-[10px] overflow-hidden  flex flex-col lg:flex-row min-h-[600px]">
@@ -43,7 +46,7 @@ const Home = () => {
                 {/* --- RIGHT SIDE: VISUALS --- */}
                 <div className="flex-1 relative h-[500px] lg:h-auto w-full">
 
-                    {/* 1. Background Orange Shape (Using uploaded image_cfb616.png) */}
+                    {/* 1. Background Orange Shape */}
                     <div className="absolute top-0 right-0 h-full w-full z-0 flex justify-end">
                         <img
                             src={b3}
@@ -52,7 +55,7 @@ const Home = () => {
                         />
                     </div>
 
-                    {/* 2. Pasta Girl Image (Using uploaded image_cfb650.jpg) */}
+                    {/* 2. Pasta Girl Image */}
                     <div className="absolute top-16 right-[25%] lg:right-[35%] z-10 hidden md:block">
                         <div className="relative transform rotate-[-2deg] hover:rotate-0 transition-transform duration-500">
                             <img
@@ -63,8 +66,7 @@ const Home = () => {
                         </div>
                     </div>
 
-                    {/* 3. Pizza Girl Image (Using uploaded image_cfb68c.jpg) */}
-                    {/* Note: mix-blend-multiply helps hide the white/grey background of the JPG */}
+                    {/* 3. Pizza Girl Image */}
                     <div className="absolute bottom-0 left-0 lg:left-[-280px] z-20 h-[85%] w-[130%] flex items-end justify-center lg:justify-start pointer-events-none">
                         <img
                             src={b1}
@@ -73,7 +75,7 @@ const Home = () => {
                         />
                     </div>
 
-                    {/* 4. Floating Notification Cards */}
+                    {/* 4. Floating Notification Cards (Static Design Elements) */}
                     <div className="absolute top-1/2 right-4 lg:right-12 -translate-y-1/2 z-30 flex flex-col gap-5">
                         <NotificationCard
                             step="1"
@@ -100,6 +102,9 @@ const Home = () => {
             <Ad />
             <Partner />
 
+            {/* --- LIVE ORDER TRACKER (Only shows if active order exists) --- */}
+            <OrderTracker />
+
             {/* --- GLOBAL STYLES --- */}
             <style>{`
                 html, body {
@@ -114,7 +119,7 @@ const Home = () => {
     );
 };
 
-// --- HELPER COMPONENT FOR THE NOTIFICATIONS ---
+// --- HELPER COMPONENT FOR THE NOTIFICATIONS (Static Visuals) ---
 const NotificationCard = ({ step, title, subtitle }) => {
     return (
         <div className="relative pl-6 group cursor-default">

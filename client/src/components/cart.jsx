@@ -1,35 +1,33 @@
-import React from 'react';
-import { X, Trash2, Plus, Minus, ShoppingBag, MapPin, ArrowRight, Zap } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const Cart = ({ isOpen, onClose, cartItems = [], onUpdate }) => {
+// --- IMPORT CHECKOUT MODAL ---
+import CheckoutModal from './CheckoutModal';
 
-  // --- 1. CALCULATE ITEM TOTAL (Using Discount Price) ---
+const Cart = ({ isOpen, onClose, cartItems = [], onUpdate }) => {
+  const [showCheckout, setShowCheckout] = useState(false); // State for Modal
+
+  // --- CALCULATIONS ---
   const itemTotal = cartItems.reduce((acc, item) => {
-    const finalPrice = item.discount_price || item.discountPrice || item.price;
+    const dPrice = item.discount_price || item.discountPrice;
+    const finalPrice = (dPrice > 0 && dPrice < item.price) ? dPrice : item.price;
     return acc + (finalPrice * item.quantity);
   }, 0);
 
-  // --- 2. CALCULATE FEES (Updated Logic) ---
-  const deliveryFee = 0; // Always Free
-  const platformFee = 0; // Removed
-  const tax = Math.round(itemTotal * 0.05); // 5% Tax on Subtotal
-
-  // --- 3. FINAL GRAND TOTAL ---
-  const grandTotal = itemTotal + deliveryFee + tax + platformFee;
+  const tax = Math.round(itemTotal * 0.05);
+  const grandTotal = itemTotal + tax;
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60]"
           />
 
-          {/* Side Drawer */}
           <motion.div
             initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
@@ -55,8 +53,9 @@ const Cart = ({ isOpen, onClose, cartItems = [], onUpdate }) => {
               ) : (
                 <div className="space-y-4">
                   {cartItems.map((item) => {
-                    const price = item.discount_price || item.discountPrice || item.price;
-                    const hasDiscount = price < item.price;
+                    const dPrice = item.discount_price || item.discountPrice;
+                    const hasDiscount = dPrice > 0 && dPrice < item.price;
+                    const finalDisplayPrice = hasDiscount ? dPrice : item.price;
 
                     return (
                       <div key={item.id || item.cart_id} className="bg-white p-4 rounded-2xl border border-stone-100 shadow-sm flex gap-4">
@@ -67,14 +66,12 @@ const Cart = ({ isOpen, onClose, cartItems = [], onUpdate }) => {
                         <div className="flex-1 flex flex-col justify-between">
                           <div className="flex justify-between items-start">
                             <h4 className="font-bold text-stone-800 line-clamp-1">{item.name}</h4>
-                            <button onClick={() => onUpdate(item.id, -1000)} className="text-stone-300 hover:text-red-500">
-                              <Trash2 size={16} />
-                            </button>
+                            <button onClick={() => onUpdate(item.id, -1000)} className="text-stone-300 hover:text-red-500"><Trash2 size={16} /></button>
                           </div>
                           <div className="flex justify-between items-end">
                             <div className="flex flex-col">
                               {hasDiscount && <span className="text-[10px] line-through text-stone-400">₹{item.price * item.quantity}</span>}
-                              <span className="font-bold text-stone-700">₹{price * item.quantity}</span>
+                              <span className="font-bold text-stone-700">₹{finalDisplayPrice * item.quantity}</span>
                             </div>
                             <div className="flex items-center bg-stone-50 rounded-lg p-1 border border-stone-100">
                               <button onClick={() => onUpdate(item.id, -1)} className="w-6 h-6 flex items-center justify-center bg-white shadow-sm rounded text-stone-600 hover:text-orange-500"><Minus size={12} /></button>
@@ -95,20 +92,10 @@ const Cart = ({ isOpen, onClose, cartItems = [], onUpdate }) => {
                   <h3 className="font-black text-sm uppercase tracking-wider text-stone-400 mb-4">Bill Details</h3>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between text-stone-600"><span>Item Total</span><span>₹{itemTotal}</span></div>
-
-                    {/* Delivery Fee Row */}
-                    <div className="flex justify-between text-stone-600">
-                      <span>Delivery Fee</span>
-                      <span className="text-green-600 font-bold">FREE</span>
-                    </div>
-
+                    <div className="flex justify-between text-stone-600"><span>Delivery Fee</span><span className="text-green-600 font-bold">FREE</span></div>
                     <div className="flex justify-between text-stone-600"><span>Taxes (5%)</span><span>₹{tax}</span></div>
-
-                    {/* Platform Fee Row Removed (since it is 0) */}
-
                     <div className="border-t border-dashed border-stone-200 my-2 pt-2 flex justify-between font-black text-lg text-stone-800">
-                      <span>To Pay</span>
-                      <span>₹{grandTotal}</span>
+                      <span>To Pay</span><span>₹{grandTotal}</span>
                     </div>
                   </div>
                 </div>
@@ -118,13 +105,29 @@ const Cart = ({ isOpen, onClose, cartItems = [], onUpdate }) => {
             {/* Footer */}
             {cartItems.length > 0 && (
               <div className="p-5 bg-white border-t border-stone-100 shadow-negative-lg">
-                <button onClick={() => alert("Proceeding to Payment...")} className="w-full bg-[#1a1a1a] text-white h-14 rounded-xl font-bold flex items-center justify-between px-6 hover:bg-orange-600 transition-all duration-300 shadow-lg group">
+                <button
+                  onClick={() => setShowCheckout(true)} // OPEN MODAL
+                  className="w-full bg-[#1a1a1a] text-white h-14 rounded-xl font-bold flex items-center justify-between px-6 hover:bg-orange-600 transition-all duration-300 shadow-lg group"
+                >
                   <span className="flex flex-col items-start leading-none"><span className="text-xs font-normal text-white/60">Total</span><span>₹{grandTotal}</span></span>
                   <span className="flex items-center gap-2">Proceed to Pay <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></span>
                 </button>
               </div>
             )}
           </motion.div>
+
+          {/* --- CHECKOUT MODAL COMPONENT --- */}
+          <CheckoutModal
+            isOpen={showCheckout}
+            onClose={() => setShowCheckout(false)}
+            total={grandTotal}
+            address="User Saved Address" // You can fetch this from user profile later
+            onSuccess={() => {
+              alert("Order Placed Successfully!");
+              onClose(); // Close Cart
+              window.location.reload(); // Refresh to update Tracker
+            }}
+          />
         </>
       )}
     </AnimatePresence>

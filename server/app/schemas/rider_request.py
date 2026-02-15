@@ -23,3 +23,9 @@ class RiderRequestResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class RiderProfileUpdate(BaseModel):
+    username: str       # <--- NEW
+    full_name: str
+    email: str
+    phone: Optional[str] = None
