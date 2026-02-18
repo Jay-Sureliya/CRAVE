@@ -814,6 +814,8 @@ def get_restaurant_orders(current_user: dict = Depends(get_current_user), db: Se
         })
     return response_data
 
+
+
 @app.put("/api/orders/{order_id}/status")
 def update_order_status(order_id: int, update: OrderStatusUpdate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
@@ -1534,6 +1536,40 @@ def submit_rider_request(request: RiderRequestCreate, db: Session = Depends(get_
     db.commit()
     return {"message": "Rider Application Received!"}
 
+
+class AddressUpdate(BaseModel):
+    address: str
+
+@app.post("/api/update-address")
+def update_user_address(
+    data: AddressUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: dict = Depends(get_current_user) # Changed type hint to dict
+):
+    try:
+        # FIX: Use brackets [] to access the ID from the dictionary
+        # Most JWT setups use 'id' or 'sub' as the key
+        user_id = current_user.get("id") or current_user.get("sub")
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found in token")
+
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found in database")
+        
+        user.address = data.address
+        db.commit()
+        db.refresh(user) # Refresh the object with new data from DB
+        
+        return {"status": "success", "message": "Address updated", "address": user.address}
+        
+    except Exception as e:
+        db.rollback()
+        # Log the error for yourself in the terminal
+        print(f"Error updating address: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
