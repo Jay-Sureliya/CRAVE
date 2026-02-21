@@ -61,18 +61,53 @@ const RestaurantsList = () => {
         fetchData();
     }, []);
 
-    // 2. Filter Logic
     useEffect(() => {
+
+        const extractPincode = (str) => {
+            if (!str) return null;
+            const match = str.match(/\b\d{6}\b/);
+            return match ? match[0] : null;
+        };
+
+        const extractCity = (str) => {
+            if (!str) return "";
+            return str.replace(/\d{6}/g, '').trim().toLowerCase();
+        };
+
         if (userLocation && restaurants.length > 0) {
-            const filtered = restaurants.filter(r =>
-                r.address && r.address.toLowerCase().includes(userLocation.toLowerCase())
-            );
-            setFilteredRestaurants(filtered);
+            const userPincode = extractPincode(userLocation);
+            const userCity = extractCity(userLocation);
+
+            const userPincodePrefix = userPincode ? userPincode.substring(0, 4) : null;
+
+            const scoredRestaurants = restaurants.map(rest => {
+                let score = 0;
+                const restPincode = extractPincode(rest.address);
+                const restAddressLower = (rest.address || "").toLowerCase();
+
+                if (userPincode && restPincode === userPincode) {
+                    score = 3; // EXACT MATCH: Top priority
+                } else if (userPincodePrefix && restPincode && restPincode.startsWith(userPincodePrefix)) {
+                    score = 2; // NEARBY MATCH: Pincode starts with same 4 digits
+                } else if (userCity && restAddressLower.includes(userCity)) {
+                    score = 1; // CITY MATCH: Same city, different area
+                }
+
+                return { ...rest, matchScore: score };
+            });
+
+            // Step 2: Filter out score 0, and Sort by score (Highest to Lowest)
+            const sortedResults = scoredRestaurants
+                .filter(rest => rest.matchScore > 0)
+                .sort((a, b) => b.matchScore - a.matchScore);
+
+            setFilteredRestaurants(sortedResults);
+
         } else {
+            // If no search is applied, show all
             setFilteredRestaurants(restaurants);
         }
     }, [userLocation, restaurants]);
-
     return (
         <div className="min-h-screen bg-[#FDFBF7] p-4 md:p-8 font-sans text-stone-900">
 
