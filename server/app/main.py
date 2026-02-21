@@ -1,436 +1,3 @@
-# from typing import List, Optional
-# from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks, Response
-# from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
-# from fastapi.middleware.cors import CORSMiddleware
-# from sqlalchemy import text, func # <--- ADDED func
-# from sqlalchemy.orm import Session, defer, load_only
-# from passlib.context import CryptContext
-# from datetime import datetime, timedelta, timezone
-# from jose import jwt, JWTError
-# import os
-# import base64 
-# from dotenv import load_dotenv
-# from pydantic import BaseModel 
-
-# # --- INTERNAL IMPORTS ---
-# from app.db.session import engine, Base, get_db
-
-# # 1. Import Models
-# from app.models.user import User, Restaurant, Favorite
-# from app.models.menu import MenuItem 
-# from app.models.restaurant_request import RestaurantRequest
-# from app.models.rider_request import RiderRequest
-# from app.schemas.rider_request import RiderRequestCreate
-
-# from app.schemas.user import UserCreate, UserUpdate, TokenResponse
-# from app.schemas.restaurant_request import RestaurantRequestCreate, RestaurantResponse
-
-# # 2. Import Routes
-# from app.routes import restaurant
-# from app.routes import admin
-# from app.routes import menu
-
-# # --- EMAIL IMPORT ---
-# from app.routes.admin import send_update_email
-
-# load_dotenv()
-
-# # ---------------- CONFIGURATION ----------------
-# SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key_here")
-# ALGORITHM = "HS256"
-# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
-# app = FastAPI(title="Crave API")
-
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["http://localhost:5173", "http://localhost:3000"], 
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-
-# Base.metadata.create_all(bind=engine)
-
-# app.include_router(restaurant.router)
-# app.include_router(admin.router)
-# app.include_router(menu.router)
-
-
-# # ---------------- HELPERS ----------------
-# def verify_password(plain, hashed): return pwd_context.verify(plain, hashed)
-# def hash_password(password): return pwd_context.hash(password)
-
-# # ---------------- PYDANTIC MODELS ----------------
-# class UserProfileUpdate(BaseModel):
-#     username: Optional[str] = None
-#     full_name: Optional[str] = None
-#     email: Optional[str] = None
-#     phone: Optional[str] = None
-#     profile_image: Optional[str] = None
-#     password: Optional[str] = None 
-
-# # ==============================================================================
-# #  AUTH DEPENDENCIES
-# # ==============================================================================
-
-# def get_current_user(token: str = Depends(oauth2_scheme)):
-#     try:
-#         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-#     except JWTError:
-#         raise HTTPException(401, "Invalid session")
-
-# def get_current_restaurant(
-#     user: dict = Depends(get_current_user), 
-#     db: Session = Depends(get_db)
-# ):
-#     if user["role"] != "restaurant": 
-#         raise HTTPException(403, "Not a restaurant")
-    
-#     res = db.query(Restaurant).filter(Restaurant.id == user.get("restaurant_id")).options(
-#         load_only(Restaurant.id, Restaurant.email, Restaurant.is_active)
-#     ).first()
-    
-#     if not res: 
-#         raise HTTPException(404, "Restaurant not found")
-#     return res
-
-# # ==============================================================================
-# #  FAVORITES API
-# # ==============================================================================
-
-# @app.get("/api/favorites")
-# def get_user_favorites(
-#     current_user: dict = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     favs = db.query(Favorite.menu_item_id).filter(Favorite.user_id == current_user["id"]).all()
-#     return [f[0] for f in favs]
-
-# @app.post("/api/favorites/{item_id}")
-# def toggle_favorite(
-#     item_id: int,
-#     current_user: dict = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     user_id = current_user["id"]
-#     existing_fav = db.query(Favorite).filter(Favorite.user_id == user_id, Favorite.menu_item_id == item_id).first()
-
-#     if existing_fav:
-#         db.delete(existing_fav)
-#         db.commit()
-#         return {"status": "removed", "item_id": item_id}
-#     else:
-#         new_fav = Favorite(user_id=user_id, menu_item_id=item_id)
-#         db.add(new_fav)
-#         db.commit()
-#         return {"status": "added", "item_id": item_id}
-
-# # ==============================================================================
-# #  MENU API ENDPOINTS
-# # ==============================================================================
-
-# def format_items(items):
-#     return [
-#         {
-#             "id": item.id,
-#             "name": item.name,
-#             "category": item.category,
-#             "description": item.description,
-#             "price": item.price,
-#             "discountPrice": item.discount_price,
-#             "type": "veg" if item.is_veg else "non-veg",
-#             "is_veg": item.is_veg,
-#             "isAvailable": item.is_available,
-#             "image": item.image 
-#         }
-#         for item in items
-#     ]
-
-# # ---------------- RESTAURANT REGISTRATION LOGIC (UPDATED) ----------------
-
-# @app.post("/api/restaurant-request")
-# def submit_restaurant_request(request: RestaurantRequestCreate, db: Session = Depends(get_db)):
-#     # 1. Check if a request already exists
-#     if db.query(RestaurantRequest).filter(RestaurantRequest.email == request.email).first():
-#         raise HTTPException(status_code=400, detail="Application with this email already exists.")
-
-#     # 2. Check if the restaurant is already active
-#     if db.query(Restaurant).filter(Restaurant.email == request.email).first():
-#         raise HTTPException(status_code=400, detail="Restaurant is already active.")
-
-#     # 3. Create the Request with 'pending' status
-#     new_request = RestaurantRequest(
-#         restaurant_name=request.restaurantName,
-#         owner_name=request.ownerName,
-#         email=request.email,
-#         phone=request.phone,
-#         address=request.address,
-#         status="pending"  # <--- CHANGED FROM "approved" TO "pending"
-#     )
-#     db.add(new_request)
-#     db.commit()
-#     db.refresh(new_request)
-
-#     # 4. Return success message (User/Restaurant is NOT created yet)
-#     return {
-#         "message": "Application submitted successfully! Please wait for Admin approval.", 
-#         "id": new_request.id
-#     }
-
-# # ==============================================================================
-# #  RESTAURANT LIST API (OPTIMIZED & DYNAMIC)
-# # ==============================================================================
-
-# # 1. GET ALL RESTAURANTS (Text Only + Dynamic Cuisine)
-# @app.get("/restaurants")
-# def get_all_restaurants(db: Session = Depends(get_db)):
-#     # REMOVE defer(Restaurant.profile_image) to include the data in the response
-#     restaurants = db.query(Restaurant).filter(Restaurant.is_active == True).all()
-    
-#     response_data = []
-#     for r in restaurants:
-#         # Dynamic Cuisine Logic (keep your existing logic)
-#         cats = db.query(MenuItem.category)\
-#                  .filter(MenuItem.restaurant_id == r.id)\
-#                  .distinct()\
-#                  .limit(2)\
-#                  .all()
-        
-#         cuisine_str = " • ".join([c[0] for c in cats if c[0]]) if cats else "Multi-Cuisine" 
-
-#         response_data.append({
-#             "id": r.id,
-#             "name": r.name,
-#             "address": r.address,
-#             "rating": "4.5",
-#             "is_active": r.is_active,
-#             "profile_image": r.profile_image, # Fetching directly from Restaurant table
-#             "cuisine": cuisine_str 
-#         })
-#     return response_data
-
-# # 2. GET RESTAURANT IMAGE (Lazy Load)
-# @app.get("/api/restaurant/image/{restaurant_id}")
-# def get_restaurant_image(restaurant_id: int, db: Session = Depends(get_db)):
-#     res = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
-    
-#     if not res or not res.profile_image:
-#         return Response(status_code=404)
-
-#     try:
-#         img_str = res.profile_image
-#         if "base64," in img_str:
-#             _, img_str = img_str.split("base64,", 1)
-        
-#         image_data = base64.b64decode(img_str)
-        
-#         # Cache for 1 year so it loads instantly next time
-#         return Response(
-#             content=image_data, 
-#             media_type="image/jpeg",
-#             headers={"Cache-Control": "public, max-age=31536000, immutable"}
-#         )
-#     except Exception:
-#         return Response(status_code=500)
-
-# @app.get("/restaurants/{restaurant_id}")
-# def get_restaurant_detail(restaurant_id: int, db: Session = Depends(get_db)):
-#     restaurant = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
-#     if not restaurant: raise HTTPException(status_code=404, detail="Restaurant not found")
-#     return restaurant
-
-# # --- USER PROFILE ROUTES ---
-
-# @app.get("/users/{user_id}")
-# def get_user_profile(user_id: int, db: Session = Depends(get_db)):
-#     user = db.query(User).filter(User.id == user_id).first()
-#     if not user:
-#         raise HTTPException(status_code=404, detail="User not found")
-    
-#     # --- FIX: Sync Restaurant Image ---
-#     profile_image = user.profile_image
-#     if user.role == "restaurant":
-#         res_data = db.query(Restaurant).filter(Restaurant.email == user.email).first()
-#         if res_data:
-#             profile_image = res_data.profile_image
-
-#     return {
-#         "id": user.id,
-#         "username": user.username,
-#         "full_name": user.full_name,
-#         "email": user.email,
-#         "phone": user.phone,
-#         "role": user.role,
-#         "profile_image": profile_image # Now returns the actual restaurant logo
-#     }
-
-# @app.put("/users/{user_id}")
-# def update_user_profile(user_id: int, data: UserProfileUpdate, db: Session = Depends(get_db)):
-#     user = db.query(User).filter(User.id == user_id).first()
-#     if not user:
-#         raise HTTPException(status_code=404, detail="User not found")
-
-#     # Update Fields
-#     if data.username: user.username = data.username
-#     if data.full_name: user.full_name = data.full_name
-#     if data.email: user.email = data.email
-#     if data.phone: user.phone = data.phone
-#     if data.profile_image: user.profile_image = data.profile_image
-    
-#     # Handle Password Change
-#     if data.password:
-#         user.hashed_password = hash_password(data.password)
-
-#     db.commit()
-#     db.refresh(user)
-#     return {"message": "Profile updated successfully"}
-
-# @app.post("/register")
-# def register(user: UserCreate, db: Session = Depends(get_db)):
-#     if db.query(User).filter(User.username == user.username).first():
-#         raise HTTPException(400, "Username taken")
-#     if db.query(User).filter(User.email == user.email).first():
-#         raise HTTPException(400, "Email registered")
-    
-#     new_user = User(
-#         username=user.username, full_name=user.full_name, email=user.email,
-#         phone=user.phone, hashed_password=hash_password(user.password),
-#         role=user.role if user.role else "customer"
-#     )
-#     db.add(new_user)
-#     db.commit()
-#     return {"message": "Registration successful"}
-
-# @app.post("/login", response_model=TokenResponse)
-# def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-#     user = db.query(User).filter(User.username == form_data.username).options(defer(User.profile_image)).first()
-    
-#     if not user or not verify_password(form_data.password, user.hashed_password):
-#         raise HTTPException(401, "Invalid credentials")
-
-#     restaurant_id = None
-#     if user.role == "restaurant":
-#         res = db.query(Restaurant).filter(Restaurant.email == user.email).options(load_only(Restaurant.id)).first()
-#         if res: restaurant_id = res.id
-
-#     token = jwt.encode({
-#         "sub": user.username, "id": user.id, "role": user.role,
-#         "restaurant_id": restaurant_id, "exp": datetime.now(timezone.utc) + timedelta(hours=2)
-#     }, SECRET_KEY, algorithm=ALGORITHM)
-
-#     return {"access_token": token, "token_type": "bearer", "role": user.role, 
-#             "username": user.username, "user_id": user.id, "restaurant_id": restaurant_id}
-
-# @app.get("/api/restaurant/me")
-# def get_my_profile(res: Restaurant = Depends(get_current_restaurant), db: Session = Depends(get_db)):
-#     full_res = db.query(Restaurant).filter(Restaurant.id == res.id).first()
-#     user = db.query(User).filter(User.email == full_res.email).first()
-#     return {
-#         "id": full_res.id, "name": full_res.name, "email": full_res.email, "address": full_res.address,
-#         "is_active": full_res.is_active, "profile_image": full_res.profile_image,
-#         "username": user.username if user else None
-#     }
-
-# @app.put("/api/restaurant/update")
-# async def update_restaurant_profile(
-#     bg_tasks: BackgroundTasks, 
-#     name: str = Form(...), 
-#     email: str = Form(...), 
-#     address: str = Form(...),
-#     username: str = Form(...), 
-#     password: Optional[str] = Form(None), 
-#     profile_image: Optional[UploadFile] = File(None),
-#     db: Session = Depends(get_db), 
-#     res: Restaurant = Depends(get_current_restaurant)
-# ):
-#     # 1. Fetch records
-#     full_res = db.query(Restaurant).filter(Restaurant.id == res.id).first()
-#     user = db.query(User).filter(User.email == full_res.email).first()
-    
-#     if not full_res:
-#         raise HTTPException(status_code=404, detail="Restaurant record not found")
-
-#     # 2. Update text fields in both tables
-#     full_res.name = name
-#     full_res.email = email
-#     full_res.address = address
-    
-#     if user: 
-#         user.email = email
-#         user.full_name = name 
-#         user.username = username 
-
-#     # 3. Handle Password Updates & Set Custom Message
-#     update_msg = "Profile updated successfully" # Default message
-#     if password and password.strip():
-#         hashed = hash_password(password)
-#         if user:
-#             user.hashed_password = hashed
-#         full_res.password = hashed
-#         # Update message to show password was changed
-#         update_msg = "Password and profile updated successfully"
-
-#     # 4. Handle Profile Image sync
-#     if profile_image:
-#         content = await profile_image.read()
-#         encoded_image = f"data:{profile_image.content_type};base64,{base64.b64encode(content).decode('utf-8')}"
-        
-#         full_res.profile_image = encoded_image
-#         if user:
-#             user.profile_image = encoded_image
-
-#     db.commit()
-    
-#     # 5. Background task for email
-#     bg_tasks.add_task(
-#         send_update_email, 
-#         email, 
-#         name, 
-#         username, 
-#         address, 
-#         password, 
-#         full_res.profile_image
-#     )
-    
-#     # Return the specific message to the frontend
-#     return {
-#         "message": update_msg, 
-#         "username": username,
-#         "name": name,
-#         "email": email,
-#         "address": address,
-#         "profile_image": full_res.profile_image
-#     }
-
-# # ---------------- RIDER REGISTRATION LOGIC ----------------
-# @app.post("/api/rider-request")
-# def submit_rider_request(request: RiderRequestCreate, db: Session = Depends(get_db)):
-#     if db.query(RiderRequest).filter(RiderRequest.email == request.email).first():
-#         raise HTTPException(status_code=400, detail="Application with this email already exists.")
-
-#     if db.query(User).filter(User.email == request.email).first():
-#         raise HTTPException(status_code=400, detail="User with this email already exists.")
-
-#     new_request = RiderRequest(
-#         full_name=request.fullName,
-#         email=request.email,
-#         phone=request.phone,
-#         city=request.city,
-#         vehicle_type=request.vehicleType,
-#         status="pending"
-#     )
-#     db.add(new_request)
-#     db.commit()
-#     db.refresh(new_request)
-
-#     return {"message": "Rider Application Received!", "id": new_request.id}
-
-# if __name__ == "__main__":
-#     import uvicorn
-#     uvicorn.run(app, host="0.0.0.0", port=8000)
-
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks, Response
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
@@ -563,55 +130,8 @@ razorpay_client = razorpay.Client(auth=(
     os.getenv("RAZORPAY_KEY_SECRET")
 ))
 
-# @app.post("/api/orders/place")
-# def place_order(order_data: OrderCreate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-#     user_id = current_user["id"]
-#     cart_items = db.query(Cart).filter(Cart.user_id == user_id).all()
-#     if not cart_items: raise HTTPException(400, "Cart is empty")
-
-#     total = 0
-#     order_items_data = []
-#     restaurant_id = cart_items[0].menu_item.restaurant_id 
-
-#     for item in cart_items:
-#         price = item.menu_item.discount_price if (item.menu_item.discount_price and item.menu_item.discount_price > 0) else item.menu_item.price
-#         total += price * item.quantity
-#         order_items_data.append({
-#             "menu_item_id": item.menu_item_id,
-#             "name": item.menu_item.name,
-#             "price": price,
-#             "quantity": item.quantity,
-#             "addons": item.addons
-#         })
-
-#     tax = round(total * 0.05, 2)
-#     grand_total = total + tax
-
-#     new_order = Order(
-#         user_id=user_id,
-#         restaurant_id=restaurant_id,
-#         status="pending",
-#         total_amount=grand_total,
-#         payment_method=order_data.payment_method,
-#         delivery_address=order_data.address,
-#         payment_status="paid" if order_data.payment_method == "RAZORPAY" else "pending"
-#     )
-#     db.add(new_order)
-#     db.flush() # Secure the ID before adding items
-
-#     for item in order_items_data:
-#         db.add(OrderItem(order_id=new_order.id, **item))
-    
-#     db.query(Cart).filter(Cart.user_id == user_id).delete()
-#     db.commit()
-
-#     return {"message": "Order placed", "order_id": new_order.id, "total": grand_total}
-
-# --- IMPORTS ---
 import razorpay # <--- NEW IMPORT
 
-# --- CONFIGURATION ---
-# Initialize Razorpay Client
 razorpay_client = razorpay.Client(auth=(
     os.getenv("RAZORPAY_KEY_ID"), 
     os.getenv("RAZORPAY_KEY_SECRET")
@@ -650,9 +170,6 @@ def place_order(order_data: OrderCreate, current_user: dict = Depends(get_curren
     tax = round(total * 0.05, 2)
     grand_total = total + tax
 
-    # 2. DETERMINE STATUS
-    # If Razorpay -> "payment_pending" (Hidden from Rider/Restaurant)
-    # If COD -> "pending" (Visible immediately)
     initial_status = "payment_pending" if order_data.payment_method == "RAZORPAY" else "pending"
 
     new_order = Order(
@@ -686,15 +203,11 @@ def place_order(order_data: OrderCreate, current_user: dict = Depends(get_curren
                 "amount": razorpay_order['amount'],
                 "key": os.getenv("RAZORPAY_KEY_ID")
             }
-            # Save the Razorpay Order ID to our DB for verification later
-            # (Optional but recommended: add a column 'razorpay_order_id' to your Order table)
-            # new_order.razorpay_order_id = razorpay_order['id'] 
+
         except Exception as e:
             print(f"Razorpay Error: {e}")
             raise HTTPException(status_code=500, detail="Payment Gateway Error")
     else:
-        # If COD, clear cart immediately. 
-        # For Razorpay, we clear cart ONLY after success (in verify route)
         db.query(Cart).filter(Cart.user_id == user_id).delete()
 
     db.commit()
@@ -720,9 +233,6 @@ def verify_payment(data: PaymentVerification, current_user: dict = Depends(get_c
             'razorpay_signature': data.razorpay_signature
         })
 
-        # 2. Find the Order
-        # Ideally, fetch by razorpay_order_id if you saved it. 
-        # If not, we find the latest 'payment_pending' order for this user.
         order = db.query(Order).filter(
             Order.user_id == current_user["id"],
             Order.status == "payment_pending"
@@ -834,60 +344,6 @@ def cancel_order(order_id: int, current_user: dict = Depends(get_current_user), 
     return {"message": "Order cancelled successfully"}
 
 
-# ==============================================================================
-#  RIDER DASHBOARD API (Corrected & Consolidated)
-# ==============================================================================
-
-# In main.py, replace the 'get_rider_stats' function with this:
-
-# @app.get("/api/rider/stats")
-# def get_rider_stats(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-#     # 1. Fetch User Data (Added this to get Name/Email for UI)
-#     user = db.query(User).filter(User.id == current_user["id"]).first()
-    
-#     rider = db.query(Rider).filter(Rider.user_id == current_user["id"]).first()
-    
-#     # 2. Auto-create Rider Profile if missing (Your existing logic)
-#     if not rider:
-#         rider = Rider(
-#             user_id=user.id,
-#             is_active=True,
-#             is_available=False, 
-#             total_earnings=0.0,
-#             total_trips=0
-#         )
-#         db.add(rider)
-#         db.commit()
-#         db.refresh(rider)
-
-#     # 3. Check for active orders (Your existing logic)
-#     active_order = db.query(Order).filter(
-#         Order.rider_id == current_user["id"], 
-#         Order.status.in_(["accepted", "ready", "out_for_delivery"])
-#     ).order_by(Order.created_at.desc()).first()
-
-#     # 4. Format Active Order
-#     active_order_data = None
-#     if active_order:
-#         active_order_data = {
-#             "id": active_order.id,
-#             "status": active_order.status,
-#             "total": active_order.total_amount,
-#             "restaurant_name": active_order.restaurant.name if active_order.restaurant else "Unknown",
-#             "restaurant_address": active_order.restaurant.address if active_order.restaurant else "",
-#             "delivery_address": active_order.delivery_address
-#         }
-
-#     # 5. Return Data (Added 'name' and 'email' here)
-#     return {
-#         "name": user.full_name,          # <--- NEW: Sends name to frontend
-#         "email": user.email,             # <--- NEW: Sends email to frontend
-#         "is_online": rider.is_available,
-#         "total_earnings": round(rider.total_earnings or 0.0, 2),
-#         "total_trips": rider.total_trips or 0,
-#         "active_order": active_order_data
-#     }
-
 @app.get("/api/rider/stats")
 def get_rider_stats(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     # 1. Fetch User Data
@@ -937,34 +393,6 @@ def get_rider_stats(current_user: dict = Depends(get_current_user), db: Session 
         "total_trips": rider.total_trips or 0,
         "active_order": active_order_data
     }
-
-
-# @app.put("/api/rider/profile")
-# def update_rider_profile(data: RiderProfileUpdate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-#     user = db.query(User).filter(User.id == current_user["id"]).first()
-    
-#     if not user: 
-#         raise HTTPException(status_code=404, detail="User not found")
-    
-#     # Check if email is being changed to one that already exists (excluding self)
-#     if data.email != user.email:
-#         existing_email = db.query(User).filter(User.email == data.email, User.id != user.id).first()
-#         if existing_email:
-#             raise HTTPException(status_code=400, detail="Email already in use")
-
-#     user.full_name = data.full_name
-#     user.email = data.email
-#     if data.phone:
-#         user.phone = data.phone
-    
-#     db.commit()
-    
-#     return {
-#         "message": "Profile updated successfully", 
-#         "name": user.full_name, 
-#         "email": user.email,
-#         "phone": user.phone
-#     }
 
 @app.put("/api/rider/profile")
 def update_rider_profile(data: RiderProfileUpdate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -1057,7 +485,7 @@ def get_available_orders(current_user: dict = Depends(get_current_user), db: Ses
         "created_at": o.created_at
     } for o in orders]
 
-    
+
 @app.post("/api/rider/orders/{order_id}/accept")
 def accept_order(order_id: int, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
@@ -1065,13 +493,20 @@ def accept_order(order_id: int, current_user: dict = Depends(get_current_user), 
     if not order: raise HTTPException(404, "Order not found")
     if order.rider_id: raise HTTPException(400, "Order already taken")
 
+    # --- THE FIX ---
+    # Fetch the actual user from the DB to get their real full_name
+    rider_user = db.query(User).filter(User.id == current_user["id"]).first()
+    
+    # Fallback to "Rider" just in case the name is empty
+    actual_rider_name = rider_user.full_name if rider_user and rider_user.full_name else "Rider"
+
     order.rider_id = current_user["id"] 
-    order.rider_name = current_user.get("full_name", "Rider") 
+    order.rider_name = actual_rider_name # Save the actual fetched name
     order.status = "accepted"
     
     db.commit()
     return {"message": "Order Accepted"}
-
+    
 @app.post("/api/rider/orders/{order_id}/pickup")
 def pickup_order(order_id: int, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id, Order.rider_id == current_user["id"]).first()
@@ -1570,6 +1005,28 @@ def update_user_address(
         # Log the error for yourself in the terminal
         print(f"Error updating address: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+        
+# Add this route to fetch the currently logged-in user's profile and address
+@app.get("/api/users/me")
+def get_current_user_profile(
+    current_user: dict = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    # Safely get the ID from the token payload
+    user_id = current_user.get("id") or current_user.get("sub")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "address": user.address # This is the crucial field we need!
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

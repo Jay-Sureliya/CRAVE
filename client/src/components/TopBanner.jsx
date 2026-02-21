@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { MapPin, ShoppingBasket, Navigation, X, CheckCircle2, Heart, AlertCircle, CheckCircle } from "lucide-react";
+import { MapPin, ShoppingBasket, Navigation, X, CheckCircle2, Heart, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../services/api";
 
@@ -30,7 +30,8 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
     // --- STATES ---
     const [location, setLocation] = useState(localStorage.getItem("user_location") || "Select Location");
     const [manualLocation, setManualLocation] = useState("");
-    const [coords, setCoords] = useState({ lat: 51.5074, lng: -0.1278 });
+    const [coords, setCoords] = useState({ lat: 51.5074, lng: -0.1278 }); // Default coordinates
+    const [isLocating, setIsLocating] = useState(false); // Loading state for GPS
 
     // Auth & Data States
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -47,13 +48,12 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
 
     // --- HELPER: Get Clean Token ---
     const getToken = () => {
-        // Check both Local and Session storage
         let raw = localStorage.getItem("authToken") || localStorage.getItem("token") || localStorage.getItem("access_token");
         if (!raw) {
             raw = sessionStorage.getItem("authToken") || sessionStorage.getItem("token") || sessionStorage.getItem("access_token");
         }
         if (!raw) return null;
-        return raw.replace(/^"|"$/g, ''); // Clean quotes
+        return raw.replace(/^"|"$/g, '');
     };
 
     // --- HELPER: Handle Logout on 401 ---
@@ -72,42 +72,30 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
     const fetchCartData = async () => {
         const token = getToken();
         if (!token) return;
-
         try {
-            const res = await api.get("/api/cart", {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await api.get("/api/cart", { headers: { Authorization: `Bearer ${token}` } });
             setCartItems(res.data);
-            setIsAuthenticated(true); // We know we are logged in if this succeeds
+            setIsAuthenticated(true);
         } catch (err) {
-            if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-                handleLogout();
-            }
+            if (err.response && (err.response.status === 401 || err.response.status === 403)) handleLogout();
         }
     };
 
     const fetchFavData = async () => {
         const token = getToken();
         if (!token) return;
-
         try {
-            const res = await api.get("/api/favorites/list", {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await api.get("/api/favorites/list", { headers: { Authorization: `Bearer ${token}` } });
             setFavItems(res.data);
             setIsAuthenticated(true);
         } catch (err) {
-            if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-                handleLogout();
-            }
+            if (err.response && (err.response.status === 401 || err.response.status === 403)) handleLogout();
         }
     };
 
     // --- EFFECTS ---
     useEffect(() => {
         const token = getToken();
-
-        // 1. Immediate UI update based on token existence
         if (token) {
             setIsAuthenticated(true);
             fetchCartData();
@@ -118,7 +106,6 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
             setFavItems([]);
         }
 
-        // 2. Auto Refresh Interval
         const intervalId = setInterval(() => {
             if (getToken()) {
                 fetchCartData();
@@ -126,7 +113,6 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
             }
         }, 5000);
 
-        // 3. Event Listeners
         window.addEventListener('cart-updated', fetchCartData);
         window.addEventListener('fav-updated', fetchFavData);
 
@@ -139,9 +125,8 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
 
     // --- HANDLERS ---
     const handleOpenCart = () => {
-        // FIX: Check token directly, don't wait for state
         if (!getToken()) {
-            showToast("Sign in first to view cart", "neutral");
+            showToast("Please sign in first to view your cart.", "neutral");
         } else {
             setIsCartOpen(true);
         }
@@ -150,14 +135,11 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
     const handleUpdateCart = async (itemId, delta) => {
         const token = getToken();
         if (!token) {
-            showToast("Sign in first", "neutral");
+            showToast("Please sign in first.", "neutral");
             return;
         }
-
         try {
-            await api.post("/api/cart", { menu_item_id: itemId, quantity: delta }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.post("/api/cart", { menu_item_id: itemId, quantity: delta }, { headers: { Authorization: `Bearer ${token}` } });
             fetchCartData();
             window.dispatchEvent(new Event('cart-updated'));
         } catch (err) {
@@ -168,11 +150,8 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
     const handleRemoveFav = async (itemId) => {
         const token = getToken();
         if (!token) return;
-
         try {
-            await api.post(`/api/favorites/${itemId}`, {}, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.post(`/api/favorites/${itemId}`, {}, { headers: { Authorization: `Bearer ${token}` } });
             fetchFavData();
             window.dispatchEvent(new Event('fav-updated'));
             showToast("Removed from Favorites", "neutral");
@@ -195,21 +174,76 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
         setLocation(newLoc);
         localStorage.setItem("user_location", newLoc);
         setIsMapOpen(false);
-        window.location.reload();
+        showToast(`Location set to ${newLoc}`, "success");
+        setTimeout(() => window.location.reload(), 1500); // Small delay to let user read the toast
     };
 
     const handleSetCurrentLocation = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition((position) => {
+        if (!navigator.geolocation) {
+            showToast("Geolocation is not supported by this browser.", "neutral");
+            return;
+        }
+
+        setIsLocating(true); // Start buffering
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
                 const { latitude, longitude } = position.coords;
                 setCoords({ lat: latitude, lng: longitude });
-                updateLocation(`Lat: ${latitude.toFixed(2)}, Lon: ${longitude.toFixed(2)}`);
-            });
-        }
+
+                try {
+                    const response = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1&accept-language=en`
+                    );
+                    const data = await response.json();
+
+                    if (data && data.address) {
+                        const city = data.address.city || data.address.town || data.address.village || data.address.state_district || "";
+                        const pincode = data.address.postcode || "";
+
+                        if (city && pincode) {
+                            updateLocation(`${city}, ${pincode}`);
+                        } else if (city) {
+                            updateLocation(city);
+                        } else {
+                            updateLocation(data.display_name.split(",")[0]);
+                        }
+                    } else {
+                        updateLocation("Location detected");
+                    }
+                } catch (error) {
+                    console.error("Reverse geocoding failed:", error);
+                    showToast("Unable to fetch city & pincode", "neutral");
+                } finally {
+                    setIsLocating(false); // Stop buffering
+                }
+            },
+            (error) => {
+                setIsLocating(false); // Stop buffering on error
+                if (error.code === 1) {
+                    showToast("Please allow location access in your browser.", "neutral");
+                } else {
+                    showToast("Unable to fetch location.", "neutral");
+                }
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
     };
 
-    const handleManualSubmit = () => {
+    const handleManualSubmit = async () => {
         if (manualLocation.trim()) {
+            try {
+                // Forward geocoding to update the map coordinates visually
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(manualLocation)}&format=json&limit=1`);
+                const data = await response.json();
+
+                if (data && data.length > 0) {
+                    setCoords({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
+                }
+            } catch (error) {
+                console.error("Forward geocoding failed:", error);
+            }
+
             updateLocation(manualLocation);
             setManualLocation("");
         }
@@ -239,9 +273,9 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
                 </div>
 
                 <div className="flex h-full">
-                    {/* FAVORITES BUTTON - FIX: Check getToken() directly */}
+                    {/* FAVORITES BUTTON */}
                     <div
-                        onClick={() => getToken() ? setIsFavOpen(true) : showToast("Sign in first", "neutral")}
+                        onClick={() => getToken() ? setIsFavOpen(true) : showToast("Please sign in first.", "neutral")}
                         className="flex items-center justify-center px-5 h-full cursor-pointer hover:bg-slate-200 border-l border-slate-200 transition-colors relative group"
                     >
                         <Heart className="w-6 h-6 text-slate-500 group-hover:text-red-500 transition-colors" />
@@ -269,7 +303,7 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
                 </div>
             </div>
 
-            {/* MODALS AND DRAWERS (Unchanged) */}
+            {/* MODALS AND DRAWERS */}
             <AnimatePresence>
                 {isMapOpen && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
@@ -282,15 +316,47 @@ const TopBanner = ({ isMapOpen, setIsMapOpen }) => {
                             </div>
                             <div className="p-6 space-y-6">
                                 <div className="w-full h-64 bg-slate-100 rounded-2xl overflow-hidden relative">
-                                    <iframe title="map" width="100%" height="100%" frameBorder="0" style={{ border: 0 }} src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&t=k&z=18&ie=UTF8&iwloc=&output=embed`} allowFullScreen></iframe>
+                                    {/* FIX: Correct syntax for Google Maps embed query params */}
+                                    <iframe
+                                        title="map"
+                                        width="100%"
+                                        height="100%"
+                                        frameBorder="0"
+                                        style={{ border: 0 }}
+                                        src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&z=15&output=embed`}
+                                        allowFullScreen>
+                                    </iframe>
                                 </div>
-                                <button onClick={handleSetCurrentLocation} className="w-full flex items-center justify-center gap-3 py-4 bg-orange-500 text-white rounded-xl font-bold text-lg hover:bg-orange-600 transition-all">
-                                    <Navigation className="w-5 h-5 fill-current" /> Use My Current Location
+
+                                {/* GPS BUTTON WITH BUFFERING */}
+                                <button
+                                    onClick={handleSetCurrentLocation}
+                                    disabled={isLocating}
+                                    className="w-full flex items-center justify-center gap-3 py-4 bg-orange-500 text-white rounded-xl font-bold text-lg hover:bg-orange-600 transition-all disabled:bg-orange-400 disabled:cursor-not-allowed"
+                                >
+                                    {isLocating ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Detecting Location...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Navigation className="w-5 h-5 fill-current" /> Use My Current Location
+                                        </>
+                                    )}
                                 </button>
+
                                 <div className="flex gap-2">
                                     <div className="relative flex-1">
                                         <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                        <input type="text" value={manualLocation} onChange={(e) => setManualLocation(e.target.value)} placeholder="Enter City (e.g. Rajkot)" className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all font-medium" onKeyPress={(e) => e.key === "Enter" && handleManualSubmit()} />
+                                        <input
+                                            type="text"
+                                            value={manualLocation}
+                                            onChange={(e) => setManualLocation(e.target.value)}
+                                            placeholder="Enter City (e.g. Rajkot)"
+                                            className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all font-medium"
+                                            onKeyPress={(e) => e.key === "Enter" && handleManualSubmit()}
+                                        />
                                     </div>
                                     <button onClick={handleManualSubmit} className="bg-slate-900 text-white px-6 rounded-xl hover:bg-slate-800 transition-colors"><CheckCircle2 className="w-6 h-6" /></button>
                                 </div>
