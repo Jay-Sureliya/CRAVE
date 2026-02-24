@@ -8,6 +8,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 import os
+import json
 import base64 
 import httpx
 from dotenv import load_dotenv 
@@ -33,7 +34,7 @@ from app.models.contact import ContactInquiry
 from app.schemas.rider_request import RiderRequestCreate
 from app.schemas.user import UserCreate, UserUpdate, TokenResponse
 from app.schemas.restaurant_request import RestaurantRequestCreate, RestaurantResponse
-from app.schemas.rider_request import RiderProfileUpdate
+from app.schemas.rider_request import RiderProfileUpdate , RiderMessage , RiderRating
 from app.schemas.user import PaymentVerification
 from app.schemas.contact import ContactSchema
 
@@ -158,14 +159,19 @@ def place_order(order_data: OrderCreate, current_user: dict = Depends(get_curren
     order_items_data = []
 
     for item in cart_items:
-        price = item.menu_item.discount_price if (item.menu_item.discount_price and item.menu_item.discount_price > 0) else item.menu_item.price
+        # FIX: Use the cart's custom price that includes addons, fallback to menu item price
+        if item.price and item.price > 0:
+            price = item.price
+        else:
+            price = item.menu_item.discount_price if (item.menu_item.discount_price and item.menu_item.discount_price > 0) else item.menu_item.price
+            
         total += price * item.quantity
         order_items_data.append({
             "menu_item_id": item.menu_item_id,
             "name": item.menu_item.name,
             "price": price,
             "quantity": item.quantity,
-            "addons": item.addons
+            "addons": item.addons # This now saves the mapped names directly to the order
         })
 
     tax = round(total * 0.05, 2)
@@ -256,27 +262,73 @@ def verify_payment(data: PaymentVerification, current_user: dict = Depends(get_c
         raise HTTPException(status_code=400, detail="Payment Verification Failed")
 
         
-# --- TRACKING (GPS Version) ---
+# # --- TRACKING (GPS Version) ---
+# @app.get("/api/orders/track")
+# def track_active_order(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+#     order = db.query(Order).filter(
+#         Order.user_id == current_user["id"],
+#         Order.status.notin_(["delivered", "cancelled"])
+#     ).order_by(Order.created_at.desc()).first()
+    
+#     if not order: return {"active": False}
+    
+#     return {
+#         "active": True,
+#         "id": order.id,
+#         "status": order.status,
+#         "total": order.total_amount,
+#         "restaurant_name": order.restaurant.name if order.restaurant else "Restaurant",
+#         "restaurant_location": {"lat": 22.3039, "lng": 70.8022}, 
+#         "user_location": {"lat": 22.2980, "lng": 70.7950},
+#         "rider_location": {"lat": 22.3010, "lng": 70.7990},
+#         "items": [{"name": i.name, "qty": i.quantity} for i in order.items]
+#     }
+
 @app.get("/api/orders/track")
-def track_active_order(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def track_active_order(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     order = db.query(Order).filter(
         Order.user_id == current_user["id"],
         Order.status.notin_(["delivered", "cancelled"])
     ).order_by(Order.created_at.desc()).first()
-    
-    if not order: return {"active": False}
-    
+
+    if not order:
+        return {"active": False}
+
+    rider_info = None
+
+    if order.rider_id:
+        rider = db.query(Rider).filter(Rider.user_id == order.rider_id).first()
+        rider_user = db.query(User).filter(User.id == order.rider_id).first()
+
+        if rider and rider_user:
+            rider_info = {
+                "name": rider_user.full_name,
+                "phone": rider_user.phone,
+                "vehicle_type": rider.vehicle_type,
+                "rating": 4.5,  # Temporary static rating (can improve later)
+                "latitude": rider.current_latitude,
+                "longitude": rider.current_longitude
+            }
+
     return {
         "active": True,
         "id": order.id,
         "status": order.status,
         "total": order.total_amount,
         "restaurant_name": order.restaurant.name if order.restaurant else "Restaurant",
-        "restaurant_location": {"lat": 22.3039, "lng": 70.8022}, 
+        "restaurant_location": {"lat": 22.3039, "lng": 70.8022},
         "user_location": {"lat": 22.2980, "lng": 70.7950},
-        "rider_location": {"lat": 22.3010, "lng": 70.7990},
-        "items": [{"name": i.name, "qty": i.quantity} for i in order.items]
+        "rider_location": {
+            "lat": rider.current_latitude if order.rider_id else None,
+            "lng": rider.current_longitude if order.rider_id else None
+        },
+        "items": [{"name": i.name, "qty": i.quantity} for i in order.items],
+        "rider_info": rider_info
     }
+
 
 # --- CUSTOMER ORDER HISTORY ---
 @app.get("/api/orders/customer/{user_id}")
@@ -299,10 +351,37 @@ def get_customer_orders(user_id: int, db: Session = Depends(get_db)):
     return response_data
 
 # --- RESTAURANT ORDERS (With Full Details) ---
+# @app.get("/api/restaurant/orders")
+# def get_restaurant_orders(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+#     if current_user["role"] != "restaurant": 
+#         raise HTTPException(403, "Access denied")
+    
+#     orders = db.query(Order).filter(
+#         Order.restaurant_id == current_user["restaurant_id"]
+#     ).order_by(Order.created_at.desc()).all()
+
+#     response_data = []
+#     for o in orders:
+#         response_data.append({
+#             "id": o.id,
+#             "status": o.status,
+#             "total_amount": o.total_amount,
+#             "created_at": o.created_at,
+#             "rider_name": o.rider_name,
+#             "customer_name": o.user.full_name if o.user else "Guest Customer",
+#             "delivery_address": o.delivery_address, 
+#             "items": [
+#                 { "name": item.name, "quantity": item.quantity, "addons": item.addons } 
+#                 for item in o.items
+#             ]
+#         })
+#     return response_data
+
+# --- RESTAURANT ORDERS (With Full Details & Add-ons) ---
 @app.get("/api/restaurant/orders")
 def get_restaurant_orders(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user["role"] != "restaurant": 
-        raise HTTPException(403, "Access denied")
+        raise HTTPException(status_code=403, detail="Access denied")
     
     orders = db.query(Order).filter(
         Order.restaurant_id == current_user["restaurant_id"]
@@ -310,6 +389,52 @@ def get_restaurant_orders(current_user: dict = Depends(get_current_user), db: Se
 
     response_data = []
     for o in orders:
+        items_list = []
+        for item in o.items:
+            # 1. Safely parse whatever is saved (could be IDs like [1, 2] or Text)
+            raw_addons = []
+            final_addon_names = [] # <--- We will put the actual TEXT here
+            
+            if item.addons and item.addons.strip() not in ["", "[]", "null"]:
+                try:
+                    raw_addons = json.loads(item.addons)
+                    if not isinstance(raw_addons, list):
+                        raw_addons = [raw_addons]
+                except Exception:
+                    # Fallback just in case it was saved as raw text instead of JSON
+                    raw_addons = [item.addons] 
+
+            # 2. TRANSLATE IDs to REAL NAMES
+            if raw_addons:
+                # Fetch the original menu item to see what the IDs mean
+                menu_item = db.query(MenuItem).filter(MenuItem.id == item.menu_item_id).first()
+                available_addons = []
+                
+                if menu_item and menu_item.addons:
+                    try:
+                        available_addons = json.loads(menu_item.addons)
+                    except Exception:
+                        pass
+                
+                for addon_val in raw_addons:
+                    # If it is a number (ID), translate it!
+                    if str(addon_val).isdigit():
+                        found_name = str(addon_val) # Fallback to number if we can't find it
+                        for avail in available_addons:
+                            if str(avail.get("id")) == str(addon_val):
+                                found_name = avail.get("name")
+                                break
+                        final_addon_names.append(found_name)
+                    else:
+                        # If it is ALREADY text (e.g. "Extra Cheese"), just keep it
+                        final_addon_names.append(str(addon_val))
+
+            items_list.append({
+                "name": item.name, 
+                "quantity": item.quantity, 
+                "addons": final_addon_names # <--- Now sending NAMES to the frontend!
+            })
+
         response_data.append({
             "id": o.id,
             "status": o.status,
@@ -318,14 +443,9 @@ def get_restaurant_orders(current_user: dict = Depends(get_current_user), db: Se
             "rider_name": o.rider_name,
             "customer_name": o.user.full_name if o.user else "Guest Customer",
             "delivery_address": o.delivery_address, 
-            "items": [
-                { "name": item.name, "quantity": item.quantity, "addons": item.addons } 
-                for item in o.items
-            ]
+            "items": items_list
         })
     return response_data
-
-
 
 @app.put("/api/orders/{order_id}/status")
 def update_order_status(order_id: int, update: OrderStatusUpdate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -372,6 +492,7 @@ def get_rider_stats(current_user: dict = Depends(get_current_user), db: Session 
     ).order_by(Order.created_at.desc()).first()
 
     # 4. Format Active Order
+   # 4. Format Active Order
     active_order_data = None
     if active_order:
         active_order_data = {
@@ -383,16 +504,23 @@ def get_rider_stats(current_user: dict = Depends(get_current_user), db: Session 
             "delivery_address": active_order.delivery_address
         }
 
-    # 5. Return Data (Added username and phone)
+    # --- NEW: Calculate Average Rating ---
+    avg_rating = 0.0
+    if rider.rating_count and rider.rating_count > 0:
+        avg_rating = rider.total_rating / rider.rating_count
+
+    # 5. Return Data (Added rating)
     return {
-        "username": user.username,       # <--- NEW: Required for the edit form
+        "username": user.username,       
         "name": user.full_name,          
         "email": user.email,             
-        "phone": user.phone,             # <--- NEW: Required for the edit form
+        "phone": user.phone,             
         "is_online": rider.is_available,
         "total_earnings": round(rider.total_earnings or 0.0, 2),
         "total_trips": rider.total_trips or 0,
-        "active_order": active_order_data
+        "rating": round(avg_rating, 1),  # <--- NEW: Sends the rating!
+        "active_order": active_order_data,
+        "message": rider.message 
     }
 
 @app.put("/api/rider/profile")
@@ -564,42 +692,147 @@ def toggle_favorite(item_id: int, current_user: dict = Depends(get_current_user)
         db.commit()
         return {"status": "added", "item_id": item_id}
 
+# @app.get("/api/cart")
+# def get_user_cart(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+#     cart_items = db.query(Cart).filter(Cart.user_id == current_user["id"]).all()
+#     return [{
+#         "id": item.menu_item.id, "name": item.menu_item.name,
+#         "price": item.price if item.price > 0 else item.menu_item.price,
+#         "discount_price": item.menu_item.discount_price, "image": item.menu_item.image,
+#         "description": item.menu_item.description, "quantity": item.quantity,
+#         "cart_id": item.id, "addons": item.addons 
+#     } for item in cart_items if item.menu_item]
+
+# @app.post("/api/cart")
+# def update_cart_item(data: CartAdd, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+#     user_id = current_user["id"]
+#     unit_price = 0
+#     if data.total_price and data.quantity > 0: unit_price = data.total_price / data.quantity
+#     cart_item = db.query(Cart).filter(Cart.user_id == user_id, Cart.menu_item_id == data.menu_item_id).first()
+#     if cart_item:
+#         new_qty = cart_item.quantity + data.quantity
+#         if new_qty > 0:
+#             cart_item.quantity = new_qty
+#             if unit_price > 0: cart_item.price = unit_price
+#             if data.customization: cart_item.addons = data.customization
+#         else: db.delete(cart_item)
+#     elif data.quantity > 0:
+#         new_item = Cart(user_id=user_id, menu_item_id=data.menu_item_id, quantity=data.quantity, price=unit_price, addons=data.customization)
+#         db.add(new_item)
+#     db.commit()
+#     return {"message": "Cart updated"}
+
+# def format_items(items):
+#     return [{
+#         "id": item.id, "name": item.name, "category": item.category,
+#         "description": item.description, "price": item.price,
+#         "discountPrice": item.discount_price, "type": "veg" if item.is_veg else "non-veg",
+#         "is_veg": item.is_veg, "isAvailable": item.is_available, "image": item.image 
+#     } for item in items]
+
 @app.get("/api/cart")
 def get_user_cart(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     cart_items = db.query(Cart).filter(Cart.user_id == current_user["id"]).all()
-    return [{
-        "id": item.menu_item.id, "name": item.menu_item.name,
-        "price": item.price if item.price > 0 else item.menu_item.price,
-        "discount_price": item.menu_item.discount_price, "image": item.menu_item.image,
-        "description": item.menu_item.description, "quantity": item.quantity,
-        "cart_id": item.id, "addons": item.addons 
-    } for item in cart_items if item.menu_item]
+    
+    result = []
+    for item in cart_items:
+        if not item.menu_item: continue
+        
+        # Safely parse addons back into a list for the frontend
+        parsed_addons = []
+        if item.addons and item.addons not in ["", "[]", "null"]:
+            try:
+                parsed_addons = json.loads(item.addons)
+            except Exception:
+                parsed_addons = [item.addons]
+
+        result.append({
+            "id": item.menu_item.id, 
+            "name": item.menu_item.name,
+            "price": item.price if item.price > 0 else item.menu_item.price,
+            "discount_price": item.menu_item.discount_price, 
+            "image": item.menu_item.image,
+            "description": item.menu_item.description, 
+            "quantity": item.quantity,
+            "cart_id": item.id, 
+            "addons": parsed_addons 
+        })
+    return result
 
 @app.post("/api/cart")
 def update_cart_item(data: CartAdd, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = current_user["id"]
+    
+    # Calculate exact unit price (Base Price + Addons Price)
     unit_price = 0
-    if data.total_price and data.quantity > 0: unit_price = data.total_price / data.quantity
-    cart_item = db.query(Cart).filter(Cart.user_id == user_id, Cart.menu_item_id == data.menu_item_id).first()
+    if data.total_price and data.quantity > 0: 
+        unit_price = data.total_price / data.quantity
+
+    # 1. Fetch the menu item to map Addon IDs to Addon Names
+    menu_item = db.query(MenuItem).filter(MenuItem.id == data.menu_item_id).first()
+    if not menu_item:
+        raise HTTPException(status_code=404, detail="Menu item not found")
+
+    addon_names = []
+    if data.customization and data.customization != "[]":
+        try:
+            selected_ids = json.loads(data.customization) # What React sends: [1, 2]
+            
+            # Match IDs with the actual Menu Item's addon list
+            if menu_item.addons:
+                available_addons = json.loads(menu_item.addons)
+                for s_id in selected_ids:
+                    for avail in available_addons:
+                        # Compare as strings to prevent int/str type mismatches
+                        if str(avail.get("id")) == str(s_id):
+                            addon_names.append(avail.get("name"))
+        except Exception as e:
+            print(f"Addon parsing error: {e}")
+            # Fallback if it's not a JSON array
+            addon_names = json.loads(data.customization) if "[" in data.customization else [data.customization]
+    
+    # Save as string array: '["Extra Cheese", "Spicy"]'
+    final_customization_str = json.dumps(addon_names) if addon_names else "[]"
+
+    # 2. Check if item with EXACT SAME ADDONS is already in cart
+    cart_item = db.query(Cart).filter(
+        Cart.user_id == user_id, 
+        Cart.menu_item_id == data.menu_item_id,
+        Cart.addons == final_customization_str 
+    ).first()
+
     if cart_item:
         new_qty = cart_item.quantity + data.quantity
         if new_qty > 0:
             cart_item.quantity = new_qty
             if unit_price > 0: cart_item.price = unit_price
-            if data.customization: cart_item.addons = data.customization
-        else: db.delete(cart_item)
+        else: 
+            db.delete(cart_item)
     elif data.quantity > 0:
-        new_item = Cart(user_id=user_id, menu_item_id=data.menu_item_id, quantity=data.quantity, price=unit_price, addons=data.customization)
+        new_item = Cart(
+            user_id=user_id, 
+            menu_item_id=data.menu_item_id, 
+            quantity=data.quantity, 
+            price=unit_price, 
+            addons=final_customization_str 
+        )
         db.add(new_item)
+        
     db.commit()
     return {"message": "Cart updated"}
-
 def format_items(items):
     return [{
-        "id": item.id, "name": item.name, "category": item.category,
-        "description": item.description, "price": item.price,
-        "discountPrice": item.discount_price, "type": "veg" if item.is_veg else "non-veg",
-        "is_veg": item.is_veg, "isAvailable": item.is_available, "image": item.image 
+        "id": item.id, 
+        "name": item.name, 
+        "category": item.category,
+        "description": item.description, 
+        "price": item.price,
+        "discountPrice": item.discount_price, 
+        "type": "veg" if item.is_veg else "non-veg",
+        "is_veg": item.is_veg, 
+        "isAvailable": item.is_available, 
+        "image": item.image,
+        "addons": item.addons # <--- ADD THIS LINE! This sends the addons to React!
     } for item in items]
 
 @app.post("/api/restaurant-request")
@@ -1028,6 +1261,89 @@ def get_current_user_profile(
         "address": user.address # This is the crucial field we need!
     }
 
+@app.post("/api/orders/{order_id}/message-rider")
+def message_rider(
+    order_id: int,
+    data: RiderMessage,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Verify the order exists
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.user_id == current_user["id"]
+    ).first()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not order.rider_id:
+        raise HTTPException(status_code=400, detail="No rider assigned yet")
+
+    # 2. Find the actual Rider in the riders table
+    # Note: order.rider_id matches the Rider.user_id based on your schema
+    rider = db.query(Rider).filter(Rider.user_id == order.rider_id).first()
+
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+
+    # 3. Save the message directly into the riders table!
+    rider.message = data.message
+    db.commit()
+
+    return {"message": "Message successfully saved to the rider's profile!"}
+
+@app.post("/api/orders/{order_id}/rate-rider")
+def rate_rider(
+    order_id: int,
+    data: RiderRating,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Verify the order
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.user_id == current_user["id"]
+    ).first()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.status != "delivered":
+        raise HTTPException(status_code=400, detail="Order not delivered yet")
+
+    if not order.rider_id:
+        raise HTTPException(status_code=400, detail="No rider assigned")
+
+    # 2. Prevent duplicate rating (Now that the column exists in SQL)
+    # Use getattr just in case the model hasn't been updated perfectly yet
+    if hasattr(order, 'rider_rating') and order.rider_rating:
+        raise HTTPException(status_code=400, detail="You already rated this rider")
+
+    # 3. Find the Rider
+    rider = db.query(Rider).filter(Rider.user_id == order.rider_id).first()
+
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+
+    # 4. Update the Rider's Aggregates
+    rider.total_rating = (rider.total_rating or 0) + data.rating
+    rider.rating_count = (rider.rating_count or 0) + 1
+
+    # 5. Mark the order as rated
+    if hasattr(order, 'rider_rating'):
+        order.rider_rating = data.rating
+
+    db.commit()
+
+    avg_rating = rider.total_rating / rider.rating_count
+
+    return {
+        "message": "Rating saved successfully!",
+        "rating": data.rating,
+        "average_rating": round(avg_rating, 2)
+    }
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

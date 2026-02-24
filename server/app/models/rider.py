@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Float, ForeignKey , Text
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -27,3 +27,8 @@ class Rider(Base):
     # Relationships
     # This links back to the User model, but does NOT define it here
     user = relationship("User", back_populates="rider")
+
+    total_rating = Column(Float, default=0)
+    rating_count = Column(Integer, default=0)
+
+    message = Column(Text, nullable=True)

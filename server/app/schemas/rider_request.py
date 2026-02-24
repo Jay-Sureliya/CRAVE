@@ -29,3 +29,9 @@ class RiderProfileUpdate(BaseModel):
     full_name: str
     email: str
     phone: Optional[str] = None
+
+class RiderMessage(BaseModel):
+    message: str
+
+class RiderRating(BaseModel):
+    rating: int
