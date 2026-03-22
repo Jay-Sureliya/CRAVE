@@ -1,4 +1,4 @@
-from typing import List, Optional
+﻿from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks, Response
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +11,11 @@ import os
 import json
 import base64 
 import httpx
+import random
+import string
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv 
 from pydantic import BaseModel 
 import razorpay
@@ -132,20 +137,12 @@ razorpay_client = razorpay.Client(auth=(
     os.getenv("RAZORPAY_KEY_SECRET")
 ))
 
-import razorpay # <--- NEW IMPORT
-
-razorpay_client = razorpay.Client(auth=(
-    os.getenv("RAZORPAY_KEY_ID"), 
-    os.getenv("RAZORPAY_KEY_SECRET")
-))
-
 # --- Pydantic Schema for Verification ---
 class PaymentVerification(BaseModel):
     razorpay_payment_id: str
     razorpay_order_id: str
     razorpay_signature: str
 
-# --- UPDATED ORDER PLACEMENT ROUTE ---
 # --- UPDATE ORDER PLACEMENT ---
 @app.post("/api/orders/place")
 def place_order(order_data: OrderCreate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -261,29 +258,6 @@ def verify_payment(data: PaymentVerification, current_user: dict = Depends(get_c
     except razorpay.errors.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Payment Verification Failed")
 
-        
-# # --- TRACKING (GPS Version) ---
-# @app.get("/api/orders/track")
-# def track_active_order(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-#     order = db.query(Order).filter(
-#         Order.user_id == current_user["id"],
-#         Order.status.notin_(["delivered", "cancelled"])
-#     ).order_by(Order.created_at.desc()).first()
-    
-#     if not order: return {"active": False}
-    
-#     return {
-#         "active": True,
-#         "id": order.id,
-#         "status": order.status,
-#         "total": order.total_amount,
-#         "restaurant_name": order.restaurant.name if order.restaurant else "Restaurant",
-#         "restaurant_location": {"lat": 22.3039, "lng": 70.8022}, 
-#         "user_location": {"lat": 22.2980, "lng": 70.7950},
-#         "rider_location": {"lat": 22.3010, "lng": 70.7990},
-#         "items": [{"name": i.name, "qty": i.quantity} for i in order.items]
-#     }
-
 @app.get("/api/orders/track")
 def track_active_order(
     current_user: dict = Depends(get_current_user),
@@ -322,8 +296,8 @@ def track_active_order(
         "restaurant_location": {"lat": 22.3039, "lng": 70.8022},
         "user_location": {"lat": 22.2980, "lng": 70.7950},
         "rider_location": {
-            "lat": rider.current_latitude if order.rider_id else None,
-            "lng": rider.current_longitude if order.rider_id else None
+            "lat": rider.current_latitude if order.rider_id and rider else None,
+            "lng": rider.current_longitude if order.rider_id and rider else None
         },
         "items": [{"name": i.name, "qty": i.quantity} for i in order.items],
         "rider_info": rider_info
@@ -349,33 +323,6 @@ def get_customer_orders(user_id: int, db: Session = Depends(get_db)):
             "location": { "lat": 22.3039, "lng": 70.8022 }
         })
     return response_data
-
-# --- RESTAURANT ORDERS (With Full Details) ---
-# @app.get("/api/restaurant/orders")
-# def get_restaurant_orders(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-#     if current_user["role"] != "restaurant": 
-#         raise HTTPException(403, "Access denied")
-    
-#     orders = db.query(Order).filter(
-#         Order.restaurant_id == current_user["restaurant_id"]
-#     ).order_by(Order.created_at.desc()).all()
-
-#     response_data = []
-#     for o in orders:
-#         response_data.append({
-#             "id": o.id,
-#             "status": o.status,
-#             "total_amount": o.total_amount,
-#             "created_at": o.created_at,
-#             "rider_name": o.rider_name,
-#             "customer_name": o.user.full_name if o.user else "Guest Customer",
-#             "delivery_address": o.delivery_address, 
-#             "items": [
-#                 { "name": item.name, "quantity": item.quantity, "addons": item.addons } 
-#                 for item in o.items
-#             ]
-#         })
-#     return response_data
 
 # --- RESTAURANT ORDERS (With Full Details & Add-ons) ---
 @app.get("/api/restaurant/orders")
@@ -448,12 +395,36 @@ def get_restaurant_orders(current_user: dict = Depends(get_current_user), db: Se
     return response_data
 
 @app.put("/api/orders/{order_id}/status")
-def update_order_status(order_id: int, update: OrderStatusUpdate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_order_status(order_id: int, status: str, db: Session = Depends(get_db)):
+    # 1. Fetch the order
     order = db.query(Order).filter(Order.id == order_id).first()
-    if not order: raise HTTPException(404)
-    order.status = update.status 
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # 2. Trigger earnings update ONLY when transitioning to "delivered"
+    if status == "delivered" and order.status != "delivered":
+        
+        # --- Update Restaurant Earnings ---
+        if order.restaurant_id:
+            restaurant = db.query(Restaurant).filter(Restaurant.id == order.restaurant_id).first()
+            if restaurant:
+                # Add food cost to restaurant
+                restaurant.total_earnings = (restaurant.total_earnings or 0.0) + order.total_amount
+        
+        # --- Update Rider Earnings ---
+        if order.rider_id:
+            # Assuming order.rider_id links to User.id. If it links to Rider.id, change to: filter(Rider.id == order.rider_id)
+            rider = db.query(Rider).filter(Rider.user_id == order.rider_id).first()
+            if rider:
+                # Add delivery fee to rider and increment trips
+                rider.total_earnings = (rider.total_earnings or 0.0) + order.delivery_fee
+                rider.total_trips = (rider.total_trips or 0) + 1
+
+    # 3. Save everything to the database
+    order.status = status
     db.commit()
-    return {"message": "Status updated", "status": order.status}
+    
+    return {"message": "Order delivered!", "status": status}
 
 @app.post("/api/orders/{order_id}/cancel")
 def cancel_order(order_id: int, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -492,7 +463,6 @@ def get_rider_stats(current_user: dict = Depends(get_current_user), db: Session 
     ).order_by(Order.created_at.desc()).first()
 
     # 4. Format Active Order
-   # 4. Format Active Order
     active_order_data = None
     if active_order:
         active_order_data = {
@@ -655,10 +625,17 @@ def complete_order(order_id: int, current_user: dict = Depends(get_current_user)
     order.status = "delivered"
     order.payment_status = "paid"
 
-    # --- EARNINGS LOGIC (10%) ---
+    # --- 1. RIDER EARNINGS (10%) ---
     commission = order.total_amount * 0.10
     rider.total_earnings = (rider.total_earnings or 0) + commission
     rider.total_trips = (rider.total_trips or 0) + 1
+
+    # --- 2. RESTAURANT EARNINGS (NEW FIX) ---
+    if order.restaurant_id:
+        restaurant = db.query(Restaurant).filter(Restaurant.id == order.restaurant_id).first()
+        if restaurant:
+            # Add the food total to the restaurant's running total
+            restaurant.total_earnings = (restaurant.total_earnings or 0.0) + order.total_amount
 
     db.commit()
     return { "message": "Order Completed", "earned": commission, "total_earnings": rider.total_earnings }
@@ -691,44 +668,6 @@ def toggle_favorite(item_id: int, current_user: dict = Depends(get_current_user)
         db.add(new_fav)
         db.commit()
         return {"status": "added", "item_id": item_id}
-
-# @app.get("/api/cart")
-# def get_user_cart(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-#     cart_items = db.query(Cart).filter(Cart.user_id == current_user["id"]).all()
-#     return [{
-#         "id": item.menu_item.id, "name": item.menu_item.name,
-#         "price": item.price if item.price > 0 else item.menu_item.price,
-#         "discount_price": item.menu_item.discount_price, "image": item.menu_item.image,
-#         "description": item.menu_item.description, "quantity": item.quantity,
-#         "cart_id": item.id, "addons": item.addons 
-#     } for item in cart_items if item.menu_item]
-
-# @app.post("/api/cart")
-# def update_cart_item(data: CartAdd, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-#     user_id = current_user["id"]
-#     unit_price = 0
-#     if data.total_price and data.quantity > 0: unit_price = data.total_price / data.quantity
-#     cart_item = db.query(Cart).filter(Cart.user_id == user_id, Cart.menu_item_id == data.menu_item_id).first()
-#     if cart_item:
-#         new_qty = cart_item.quantity + data.quantity
-#         if new_qty > 0:
-#             cart_item.quantity = new_qty
-#             if unit_price > 0: cart_item.price = unit_price
-#             if data.customization: cart_item.addons = data.customization
-#         else: db.delete(cart_item)
-#     elif data.quantity > 0:
-#         new_item = Cart(user_id=user_id, menu_item_id=data.menu_item_id, quantity=data.quantity, price=unit_price, addons=data.customization)
-#         db.add(new_item)
-#     db.commit()
-#     return {"message": "Cart updated"}
-
-# def format_items(items):
-#     return [{
-#         "id": item.id, "name": item.name, "category": item.category,
-#         "description": item.description, "price": item.price,
-#         "discountPrice": item.discount_price, "type": "veg" if item.is_veg else "non-veg",
-#         "is_veg": item.is_veg, "isAvailable": item.is_available, "image": item.image 
-#     } for item in items]
 
 @app.get("/api/cart")
 def get_user_cart(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -852,8 +791,15 @@ def get_all_restaurants(db: Session = Depends(get_db)):
         cats = db.query(MenuItem.category).filter(MenuItem.restaurant_id == r.id).distinct().limit(2).all()
         cuisine_str = " • ".join([c[0] for c in cats if c[0]]) if cats else "Multi-Cuisine" 
         response_data.append({
-            "id": r.id, "name": r.name, "address": r.address, "rating": "4.5",
-            "is_active": r.is_active, "profile_image": r.profile_image, "cuisine": cuisine_str 
+            "id": r.id, 
+            "name": r.name, 
+            "address": r.address, 
+            "rating": "4.5",
+            "is_active": r.is_active, 
+            "profile_image": r.profile_image, 
+            "cuisine": cuisine_str,
+            # --- NEW: Send earnings to the frontend safely ---
+            "total_earnings": getattr(r, "total_earnings", 0.0) 
         })
     return response_data
 
@@ -895,6 +841,31 @@ def update_user_profile(user_id: int, data: UserProfileUpdate, db: Session = Dep
     if data.password: user.hashed_password = hash_password(data.password)
     db.commit()
     return {"message": "Profile updated successfully"}
+
+# --- THIS IS THE NEW DELETE ENDPOINT FOR THE ADMIN PANEL ---
+@app.delete("/admin/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    # 1. Fetch User
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 2. If User is a RIDER, delete their rider profile first (Foreign Key Constraint)
+    rider = db.query(Rider).filter(Rider.user_id == user_id).first()
+    if rider:
+        db.delete(rider)
+
+    # 3. If User is a RESTAURANT, delete their restaurant profile
+    if user.role == "restaurant":
+        restaurant = db.query(Restaurant).filter(Restaurant.email == user.email).first()
+        if restaurant:
+            db.delete(restaurant)
+
+    # 4. Finally, Delete the User
+    db.delete(user)
+    db.commit()
+    
+    return {"message": "User and related profiles deleted successfully"}
 
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):

@@ -1,10 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey , Float
 from sqlalchemy.orm import relationship 
 from app.db.session import Base
-
-# ... keep your existing imports ...
-
-# ... keep your existing imports ...
 
 class User(Base):
     __tablename__ = "users"
@@ -44,6 +40,8 @@ class Restaurant(Base):
 
     # Relationship to Menu Items
     menu_items = relationship("MenuItem", back_populates="restaurant")
+
+    total_earnings = Column(Float, default=0.0)
 
 # 3. FAVORITES (NEW TABLE)
 class Favorite(Base):

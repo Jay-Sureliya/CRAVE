@@ -1,4 +1,4 @@
-import os
+﻿import os
 import smtplib
 import base64
 from typing import Optional, List
@@ -16,6 +16,8 @@ from app.models.restaurant_request import RestaurantRequest
 from app.models.rider_request import RiderRequest 
 from app.models.user import User, Restaurant
 from app.models.rider import Rider
+from app.models.order import Order # <--- Make sure this is imported at the top!
+from sqlalchemy import func
 
 # --- CONFIGURATION ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -31,6 +33,12 @@ class AdminUserResponse(BaseModel):
     email: Optional[str] = None
     role: str
     phone: Optional[str] = None
+    # --- NEW FIELDS FOR ADMIN DASHBOARD ---
+    rating: Optional[float] = 0.0
+    total_earnings: Optional[float] = 0.0
+    total_trips: Optional[int] = 0
+    total_spent: Optional[float] = 0.0
+    
     class Config:
         from_attributes = True
 
@@ -102,7 +110,8 @@ def _send_email_core(to_email, subject, body, image_base64=None):
         print(f"❌ Email Failed: {e}")
 
 # --- RESTAURANT EMAIL ---
-def send_login_email(to_email: str, username: str, password: str):
+def send_login_email(to_email: str, username: str
+, password: str):
     subject = "Welcome to the Crave Family! 🍽️"
     body = f"""
     <html>
@@ -169,9 +178,55 @@ def get_admin_stats(db: Session = Depends(get_db)):
         }
     }
 
+
+from sqlalchemy import func
+from app.models.order import Order # Ensure this is imported!
+
+from sqlalchemy import func
+from app.models.order import Order
+
 @router.get("/users", response_model=List[AdminUserResponse])
 def get_all_users(db: Session = Depends(get_db)):
-    return db.query(User).all()
+    users = db.query(User).all()
+    
+    response_data = []
+    for u in users:
+        user_data = {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "role": u.role,
+            "phone": u.phone,
+            "total_earnings": 0.0,
+            "total_trips": 0,
+            "rating": 0.0,
+            "total_spent": 0.0  # Default to 0
+        }
+        
+        # --- CUSTOMER LOGIC (Calculates total spent) ---
+        if u.role == "customer":
+            # Bulletproof sum query for this specific user
+            spent = db.query(func.sum(Order.total_amount)).filter(
+                Order.user_id == u.id,
+                Order.status == "delivered"
+            ).scalar()
+            
+            user_data["total_spent"] = float(spent) if spent else 0.0
+                
+        # --- RIDER LOGIC (Calculates earnings & rating) ---
+        elif u.role in ["rider", "driver"] and getattr(u, "rider", None):
+            user_data["total_earnings"] = getattr(u.rider, "total_earnings", 0.0) or 0.0
+            user_data["total_trips"] = getattr(u.rider, "total_trips", 0) or 0
+            
+            t_rating = getattr(u.rider, "total_rating", 0.0) or 0.0
+            r_count = getattr(u.rider, "rating_count", 0) or 0
+            
+            if r_count > 0:
+                user_data["rating"] = round(t_rating / r_count, 1)
+                
+        response_data.append(user_data)
+        
+    return response_data
 
 # --- RESTAURANT REQUESTS ---
 @router.get("/requests", response_model=List[AdminRequestResponse])

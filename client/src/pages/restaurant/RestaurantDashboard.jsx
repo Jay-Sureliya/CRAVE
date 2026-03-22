@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-    User, LogOut, LayoutDashboard, UtensilsCrossed, ShoppingBag, ArrowLeft,
-    ChevronRight, ShieldCheck, CreditCard, MapPin, X, Save, Lock, Mail,
-    Home, Camera, UploadCloud, UserCircle, Edit2
+    User, LogOut, LayoutDashboard, UtensilsCrossed, ShoppingBag, 
+    ShieldCheck, X, Save, Edit2, Camera, Home, Bell, Search, 
+    DollarSign, Star, Activity, ChevronRight, CheckCircle
 } from "lucide-react";
+
+// --- NEW IMPORT FOR ANALYTICS (Added Legend) ---
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 import api from "../../services/api";
 import RestaurantOrders from "../restaurant/RestaurantOrders";
@@ -13,104 +16,152 @@ import RestaurantMenu from "../restaurant/RestaurantMenu";
 
 const RestaurantDashboard = () => {
     const navigate = useNavigate();
-
-    // --- THE FIX: Load active tab from localStorage ---
-    const [activeTab, setActiveTab] = useState(() => {
-        return localStorage.getItem("restaurantActiveTab") || "profile";
-    });
-
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [toastMessage, setToastMessage] = useState(""); // <-- NEW: State for success popup
     const fileInputRef = useRef(null);
 
-    // --- THE FIX: Save active tab on change ---
-    useEffect(() => {
-        localStorage.setItem("restaurantActiveTab", activeTab);
-    }, [activeTab]);
-
     // --- STATE ---
+    const [activeTab, setActiveTab] = useState(() => localStorage.getItem("restaurantActiveTab") || "overview");
+    const [globalSearch, setGlobalSearch] = useState(""); 
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [toastMessage, setToastMessage] = useState("");
+    
+    // Notification States
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [pendingOrders, setPendingOrders] = useState([]);
+    const knownOrdersRef = useRef(new Set()); 
+    
+    // Data States
     const [userData, setUserData] = useState({
-        id: null,
-        username: "",
-        name: "",
-        email: "",
-        address: "",
-        role: "restaurant",
-        is_active: true,
-        profile_image: null
+        id: null, username: "", name: "", email: "", address: "", 
+        role: "restaurant", is_active: true, profile_image: null
+    });
+    
+    const [stats, setStats] = useState({
+        revenue: 0,
+        orders: 0,
+        rating: 0
     });
 
+    // --- CHART DATA STATE ---
+    const [chartData, setChartData] = useState([]);
+
     const [formData, setFormData] = useState({
-        username: "",
-        name: "",
-        email: "",
-        address: "",
-        password: "",
-        confirmPassword: ""
+        username: "", name: "", email: "", address: "", 
+        password: "", confirmPassword: ""
     });
 
     const [selectedFile, setSelectedFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
-    const [imageError, setImageError] = useState(false);
 
-    // --- HELPER Logic ---
-    const formatImageUrl = (url) => {
-        if (!url) return null;
-        if (url.startsWith("data:image")) return url;
-        const separator = url.includes('?') ? '&' : '?';
-        return `${url}${separator}t=${new Date().getTime()}`;
-    };
-
-    const compressImage = (file) => {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target.result;
-                img.onload = () => {
-                    const canvas = document.createElement("canvas");
-                    const MAX_WIDTH = 800;
-                    const scaleSize = MAX_WIDTH / img.width;
-                    canvas.width = MAX_WIDTH;
-                    canvas.height = img.height * scaleSize;
-                    const ctx = canvas.getContext("2d");
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    canvas.toBlob((blob) => resolve(new File([blob], file.name, { type: "image/jpeg" })), "image/jpeg", 0.8);
-                };
-            };
-        });
-    };
-
-    // --- FETCH DATA ---
+    // --- EFFECTS ---
     useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                const response = await api.get("/api/restaurant/me");
-                const data = response.data;
-                if (data.id) sessionStorage.setItem("restaurant_id", data.id);
+        localStorage.setItem("restaurantActiveTab", activeTab);
+        setGlobalSearch(""); 
+    }, [activeTab]);
 
-                setUserData({
-                    id: data.id,
-                    username: data.username || "",
-                    name: data.name || "Restaurant",
-                    email: data.email || "",
-                    address: data.address || "",
-                    role: "restaurant",
-                    is_active: data.is_active,
-                    profile_image: formatImageUrl(data.profile_image)
-                });
-            } catch (error) {
-                if (error.response?.status === 401) navigate("/login");
+    // --- FETCH DATA (Auto Refresh Stats) ---
+    const fetchDashboardData = async () => {
+        try {
+            // 1. Profile 
+            const profileRes = await api.get("/api/restaurant/me");
+            const data = profileRes.data;
+            if (data.id) sessionStorage.setItem("restaurant_id", data.id);
+
+            setUserData(prev => ({
+                ...prev,
+                ...data,
+                name: data.name || "Restaurant",
+                profile_image: data.profile_image 
+                    ? (data.profile_image.startsWith("data:") ? data.profile_image : `${data.profile_image}?t=${Date.now()}`)
+                    : null
+            }));
+
+            // 2. Orders for Analytics & Notifications
+            const ordersRes = await api.get("/api/restaurant/orders");
+            const orders = ordersRes.data || [];
+            
+            // --- NOTIFICATION LOGIC ---
+            const currentPending = orders.filter(o => o.status === 'pending');
+            const newArrivals = currentPending.filter(o => !knownOrdersRef.current.has(o.id));
+            
+            if (newArrivals.length > 0 && knownOrdersRef.current.size > 0) {
+                setToastMessage(`🔔 You have ${newArrivals.length} new order(s)!`);
+                setTimeout(() => setToastMessage(""), 4000);
             }
-        };
-        fetchProfile();
+
+            currentPending.forEach(o => knownOrdersRef.current.add(o.id));
+            setPendingOrders(currentPending);
+
+            // --- GENERATE 30-DAY CHART DATA & STATS ---
+            // Create an array of the last 30 dates formatted as "Oct 12"
+            const last30Days = [...Array(30)].map((_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }).reverse(); 
+
+            const aggregatedData = last30Days.map(day => ({ name: day, revenue: 0, orders: 0 }));
+
+            let thirtyDayRevenue = 0;
+            let thirtyDayOrders = 0;
+
+            orders.forEach(o => {
+                if(o.status === 'cancelled') return;
+                
+                // Get formatted date for this order
+                const orderDateObj = o.created_at ? new Date(o.created_at) : new Date();
+                const orderDay = orderDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                
+                const dayIndex = aggregatedData.findIndex(d => d.name === orderDay);
+                if(dayIndex !== -1) {
+                    aggregatedData[dayIndex].revenue += parseFloat(o.total_amount || 0);
+                    aggregatedData[dayIndex].orders += 1;
+                    
+                    // Add to card totals
+                    thirtyDayRevenue += parseFloat(o.total_amount || 0);
+                    thirtyDayOrders += 1;
+                }
+            });
+
+            setChartData(aggregatedData);
+
+            const currentRating = data.rating ? Number(data.rating).toFixed(1) : 4.5; 
+
+            // Update stats to show exactly 30 days
+            setStats({
+                revenue: thirtyDayRevenue,
+                orders: thirtyDayOrders,
+                rating: currentRating
+            });
+            // ----------------------------------------------
+
+        } catch (error) {
+            if (error.response?.status === 401) navigate("/login");
+        }
+    };
+
+    useEffect(() => {
+        fetchDashboardData();
+        const interval = setInterval(fetchDashboardData, 3000); 
+        return () => clearInterval(interval);
     }, [navigate]);
 
+    // --- HANDLERS ---
     const handleLogout = () => {
         sessionStorage.clear();
         localStorage.clear();
         navigate("/login");
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setSelectedFile(file);
+            setImagePreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleInputChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
     const openEditModal = () => {
@@ -123,22 +174,7 @@ const RestaurantDashboard = () => {
             confirmPassword: ""
         });
         setImagePreview(userData.profile_image);
-        setSelectedFile(null);
         setIsEditModalOpen(true);
-    };
-
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const compressed = await compressImage(file);
-            setSelectedFile(compressed);
-            setImagePreview(URL.createObjectURL(compressed));
-        }
     };
 
     const handleSaveProfile = async (e) => {
@@ -159,271 +195,371 @@ const RestaurantDashboard = () => {
             const response = await api.put("/api/restaurant/update", data, {
                 headers: { "Content-Type": "multipart/form-data" }
             });
-            const result = response.data;
-            setImageError(false);
-
-            // --- THE FIX: Use formData values directly because backend only returns the image ---
+            
             setUserData(prev => ({
                 ...prev,
-                username: formData.username,
-                name: formData.name,
-                email: formData.email,
-                address: formData.address,
-                profile_image: formatImageUrl(result.profile_image) || prev.profile_image
+                ...formData,
+                profile_image: response.data.profile_image
             }));
 
             setIsEditModalOpen(false);
-
-            // --- THE FIX: Show success popup ---
             setToastMessage("Profile updated successfully!");
-            setTimeout(() => setToastMessage(""), 3500); // Hide after 3.5 seconds
-
+            setTimeout(() => setToastMessage(""), 3500);
         } catch (error) {
-            alert(error.response?.data?.detail || "Failed to update profile.");
+            alert("Failed to update profile.");
         }
     };
 
     return (
-        <div className="flex h-screen w-screen bg-[#FCF8F5] text-slate-800 font-sans overflow-hidden relative">
+        <>
+            <style>{`
+                html, body { scrollbar-width: none; -ms-overflow-style: none; }
+                html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+            `}</style>
 
-            {/* SUCCESS TOAST POPUP */}
-            <AnimatePresence>
-                {toastMessage && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.9 }}
-                        className="fixed bottom-8 right-8 z-[200] bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl shadow-emerald-600/20 font-bold flex items-center gap-3"
-                    >
-                        <ShieldCheck size={24} className="text-emerald-200" />
-                        {toastMessage}
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            <div className="flex h-screen w-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-hidden">
+                
+                {/* --- TOAST --- */}
+                <AnimatePresence>
+                    {toastMessage && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 50 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            className={`fixed bottom-8 right-8 z-[200] text-white px-6 py-4 rounded-xl shadow-2xl font-medium flex items-center gap-3 ${toastMessage.includes("🔔") ? "bg-orange-600" : "bg-emerald-600"}`}
+                        >
+                            {toastMessage.includes("🔔") ? <Bell size={20} className="text-white animate-wiggle" /> : <ShieldCheck size={20} className="text-white" />}
+                            {toastMessage}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
-            {/* SIDEBAR */}
-            <aside className="w-[280px] bg-white flex flex-col h-full z-30 border-r border-orange-100/50 shadow-[4px_0_24px_-12px_rgba(234,88,12,0.1)] relative">
-                <div className="h-24 flex-none flex items-center px-8">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white font-black shadow-md shadow-orange-500/20">C</div>
-                        <span className="text-2xl font-black tracking-tight text-slate-900">CRAVE</span>
-                    </div>
-                </div>
-
-                <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto custom-scrollbar">
-                    <p className="px-4 mb-4 text-xs font-bold text-orange-300 uppercase tracking-wider">Dashboard</p>
-                    <NavItem icon={User} label="Profile & Settings" isActive={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
-                    <NavItem icon={LayoutDashboard} label="Overview" isActive={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
-                    <NavItem icon={ShoppingBag} label="Orders" count="Live" isActive={activeTab === "orders"} onClick={() => setActiveTab("orders")} />
-                    <NavItem icon={UtensilsCrossed} label="Menu Items" isActive={activeTab === "menu"} onClick={() => setActiveTab("menu")} />
-                </nav>
-
-                <div className="flex-none p-5 border-t border-orange-50 bg-gradient-to-b from-white to-orange-50/30">
-                    <div className="flex items-center gap-3 mb-5 px-2">
-                        {userData.profile_image && !imageError ? (
-                            <img src={userData.profile_image} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-orange-100 shadow-sm" onError={() => setImageError(true)} />
-                        ) : (
-                            <div className="w-10 h-10 rounded-full bg-orange-100 border border-orange-200 flex items-center justify-center text-orange-600 font-bold">
-                                {(userData.name || "C").charAt(0)}
+                {/* --- SIDEBAR --- */}
+                <aside className="w-72 bg-white border-r border-gray-200 flex flex-col h-full z-30 shadow-sm transition-all">
+                    <div className="h-24 flex-none flex items-center px-8 border-b border-gray-50">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">C</div>
+                            <div>
+                                <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-none">Crave.</h1>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Partner</span>
                             </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-slate-900 truncate">{userData.name || "Restaurant"}</p>
-                            <p className="text-xs font-medium text-orange-500 truncate capitalize">{userData.role}</p>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button onClick={() => navigate("/")} className="flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"><ArrowLeft size={14} /> Home</button>
-                        <button onClick={handleLogout} className="flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-red-600 bg-white border border-red-100 rounded-xl hover:bg-red-50 transition-colors shadow-sm"><LogOut size={14} /> Logout</button>
+
+                    <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto no-scrollbar">
+                        <div className="px-4 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Operations</div>
+                        <NavItem icon={LayoutDashboard} label="Overview" isActive={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
+                        <NavItem icon={ShoppingBag} label="Live Orders" count={pendingOrders.length > 0 ? pendingOrders.length : null} isActive={activeTab === "orders"} onClick={() => setActiveTab("orders")} />
+                        <NavItem icon={UtensilsCrossed} label="Menu Catalog" isActive={activeTab === "menu"} onClick={() => setActiveTab("menu")} />
+                        
+                        <div className="px-4 mt-8 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Account</div>
+                        <NavItem icon={User} label="Profile & Settings" isActive={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
+                    </nav>
+
+                    <div className="flex-none p-4 bg-gray-50 border-t border-gray-100 space-y-2">
+                        <button onClick={() => navigate("/")} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-black hover:text-black transition-all">
+                            <Home size={18} /> Back to Website
+                        </button>
+                        <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                            <LogOut size={18} /> Sign Out
+                        </button>
                     </div>
-                </div>
-            </aside>
+                </aside>
 
-            {/* MAIN CONTENT */}
-            <main className="flex-1 flex flex-col h-full min-w-0 overflow-y-auto">
-                <AnimatePresence mode="wait">
-                    {activeTab === "profile" && (
-                        <motion.div key="profile" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="max-w-5xl mx-auto w-full p-8 lg:p-10 space-y-8">
+                {/* --- MAIN CONTENT --- */}
+                <main className="flex-1 h-full overflow-y-auto no-scrollbar bg-[#F8F9FA] p-8 md:p-12 relative flex flex-col">
+                    
+                    {/* Header Bar */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+                        <div>
+                            <h2 className="text-3xl font-bold text-gray-900">
+                                {activeTab === 'overview' && 'Dashboard Overview'}
+                                {activeTab === 'orders' && 'Order Management'}
+                                {activeTab === 'menu' && 'Menu Catalog'}
+                                {activeTab === 'profile' && 'Restaurant Profile'}
+                            </h2>
+                            <p className="text-gray-500 mt-1">
+                                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            </p>
+                        </div>
 
-                            {/* PROFILE HEADER CARD */}
-                            <div className="bg-white rounded-2xl border border-orange-100 shadow-sm p-8 flex flex-col md:flex-row items-center md:items-start gap-8 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-orange-50 rounded-full blur-3xl opacity-60 pointer-events-none -mt-20 -mr-20"></div>
+                        <div className="flex items-center gap-4 w-full md:w-auto relative">
+                            {/* --- GLOBAL SEARCH BAR --- */}
+                            {(activeTab === 'orders' || activeTab === 'menu') && (
+                                <div className="relative group flex-1 md:w-80">
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors" size={18} />
+                                    <input 
+                                        type="text" 
+                                        value={globalSearch}
+                                        onChange={(e) => setGlobalSearch(e.target.value)}
+                                        placeholder={activeTab === 'menu' ? "Search dishes..." : "Search Order ID..."}
+                                        className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-full text-sm focus:ring-2 focus:ring-black/5 focus:border-black outline-none shadow-sm transition-all" 
+                                    />
+                                </div>
+                            )}
 
-                                <div className="w-32 h-32 rounded-2xl border-4 border-white shadow-md bg-orange-50 overflow-hidden shrink-0 relative z-10 flex items-center justify-center">
-                                    {userData.profile_image && !imageError ? (
-                                        <img src={userData.profile_image} alt="Profile" className="w-full h-full object-cover" onError={() => setImageError(true)} />
-                                    ) : (
-                                        <span className="text-4xl font-black text-orange-400">{(userData.name || "C").charAt(0)}</span>
+                            {/* --- BELL ICON & DROPDOWN --- */}
+                            <div className="relative">
+                                <div 
+                                    onClick={() => setShowNotifications(!showNotifications)}
+                                    className={`p-3 bg-white rounded-full border ${pendingOrders.length > 0 ? 'border-orange-200 text-orange-500 shadow-md' : 'border-gray-200 text-gray-400 hover:text-black'} cursor-pointer transition-all shadow-sm relative`}
+                                >
+                                    <Bell size={20} />
+                                    {pendingOrders.length > 0 && (
+                                        <span className="absolute top-2.5 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
                                     )}
                                 </div>
 
-                                <div className="flex-1 text-center md:text-left relative z-10 pt-2">
-                                    <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-1">{userData.name || "My Restaurant"}</h2>
-                                    <p className="text-sm font-semibold text-orange-500 mb-4">@{userData.username}</p>
-
-                                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-6">
-                                        <Badge icon={<MapPin size={14} />} label={userData.address || "No address provided"} />
-                                        <Badge icon={<ShieldCheck size={14} className="text-emerald-500" />} label="Verified Partner" bg="bg-emerald-50" border="border-emerald-100" />
-                                    </div>
-                                </div>
-
-                                <div className="relative z-10 pt-2">
-                                    <button onClick={openEditModal} className="px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:border-orange-200 hover:text-orange-600 transition-all flex items-center gap-2">
-                                        <Edit2 size={16} /> Edit Profile
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* DETAILS & ACTIONS GRID */}
-                            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-
-                                <div className="lg:col-span-3 bg-white rounded-2xl border border-orange-100 shadow-sm overflow-hidden">
-                                    <div className="px-8 py-5 border-b border-orange-50 bg-orange-50/30 flex items-center gap-3">
-                                        <UserCircle className="text-orange-500" size={20} />
-                                        <h3 className="font-bold text-slate-900">Account Details</h3>
-                                    </div>
-                                    <div className="p-8 space-y-2">
-                                        <DetailRow label="Restaurant Name" value={userData.name} />
-                                        <DetailRow label="Login Username" value={`@${userData.username}`} />
-                                        <DetailRow label="Email Address" value={userData.email} />
-                                        <DetailRow label="Business Address" value={userData.address} />
-                                        <DetailRow label="Account Status" value={userData.is_active ? "Active & Open" : "Closed"} highlight={userData.is_active} />
-                                    </div>
-                                </div>
-
-                                <div className="lg:col-span-2 bg-white rounded-2xl border border-orange-100 shadow-sm overflow-hidden">
-                                    <div className="px-8 py-5 border-b border-orange-50 bg-orange-50/30 flex items-center gap-3">
-                                        <LayoutDashboard className="text-orange-500" size={20} />
-                                        <h3 className="font-bold text-slate-900">Quick Actions</h3>
-                                    </div>
-                                    <div className="p-5 space-y-3">
-                                        <ActionTile icon={UtensilsCrossed} title="Manage Menu" desc="Update your dishes & prices" onClick={() => setActiveTab('menu')} />
-                                        <ActionTile icon={ShoppingBag} title="View Orders" desc="Monitor live kitchen requests" onClick={() => setActiveTab('orders')} />
-                                        <ActionTile icon={CreditCard} title="Billing Setup" desc="Manage payout preferences" />
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {activeTab === "orders" && <motion.div key="orders" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><RestaurantOrders /></motion.div>}
-                    {activeTab === "menu" && <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><RestaurantMenu /></motion.div>}
-                </AnimatePresence>
-            </main>
-
-            {/* EDIT MODAL */}
-            <AnimatePresence>
-                {isEditModalOpen && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-                        <motion.div initial={{ scale: 0.95, opacity: 0, y: 15 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 15 }} transition={{ duration: 0.2 }} className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-orange-100 flex flex-col max-h-[90vh] overflow-hidden">
-
-                            <div className="flex justify-between items-center px-8 py-6 border-b border-orange-50 bg-orange-50/30">
-                                <div>
-                                    <h3 className="text-xl font-bold text-slate-900">Edit Settings</h3>
-                                    <p className="text-xs font-semibold text-orange-500 mt-1">Update restaurant details</p>
-                                </div>
-                                <button onClick={() => setIsEditModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
-                                    <X size={18} />
-                                </button>
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                                <form id="profileForm" onSubmit={handleSaveProfile} className="space-y-6">
-                                    <div className="flex justify-center mb-2">
-                                        <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
-                                            <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-orange-100 bg-orange-50 shadow-sm p-1">
-                                                <div className="w-full h-full rounded-xl overflow-hidden bg-white">
-                                                    {imagePreview ? (
-                                                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-orange-300"><UploadCloud size={28} /></div>
-                                                    )}
-                                                </div>
+                                {/* Notifications Dropdown */}
+                                <AnimatePresence>
+                                    {showNotifications && (
+                                        <motion.div 
+                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                            className="absolute right-0 mt-4 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden"
+                                        >
+                                            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                                                <span className="font-bold text-sm text-gray-900">New Orders</span>
+                                                <span className="text-[10px] bg-orange-100 text-orange-600 px-2.5 py-1 rounded-full font-black uppercase tracking-wider">
+                                                    {pendingOrders.length} Pending
+                                                </span>
                                             </div>
-                                            <div className="absolute inset-0 bg-slate-900/40 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Camera className="text-white" size={24} />
+                                            <div className="max-h-72 overflow-y-auto no-scrollbar">
+                                                {pendingOrders.length === 0 ? (
+                                                    <div className="p-8 text-center flex flex-col items-center justify-center text-gray-400">
+                                                        <CheckCircle size={32} className="mb-2 text-gray-200" />
+                                                        <p className="text-sm font-bold">All caught up!</p>
+                                                        <p className="text-xs mt-1">No new orders waiting.</p>
+                                                    </div>
+                                                ) : (
+                                                    pendingOrders.map(order => (
+                                                        <div 
+                                                            key={order.id} 
+                                                            onClick={() => { setActiveTab('orders'); setShowNotifications(false); }} 
+                                                            className="p-5 hover:bg-orange-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors group"
+                                                        >
+                                                            <div className="flex justify-between items-start mb-1.5">
+                                                                <p className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">Order #{order.id}</p>
+                                                                <p className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">₹{order.total_amount}</p>
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 font-medium truncate">
+                                                                {order.items ? order.items.map(i => i.name).join(', ') : "View order details"}
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-wider flex items-center gap-1">
+                                                                Click to process <ChevronRight size={12} />
+                                                            </p>
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                            
+                        </div>
+                    </div>
+
+                    <AnimatePresence mode="wait">
+                        {activeTab === "overview" && (
+                            <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                                
+                                {/* --- UPDATED: 30-DAY STAT CARDS --- */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <StatCard label="30-Day Revenue" value={`₹${stats.revenue.toLocaleString()}`} icon={DollarSign} color="bg-slate-900" />
+                                    <StatCard label="30-Day Orders" value={stats.orders} icon={ShoppingBag} color="bg-orange-600" />
+                                    <StatCard label="Customer Rating" value={stats.rating} icon={Star} color="bg-blue-600" />
+                                </div>
+
+                                {/* --- UPDATED: 30-DAY DUAL AXIS CHART --- */}
+                                <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col h-[420px]">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="text-lg font-bold text-gray-900">Performance Trend (Last 30 Days)</h3>
+                                        <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
+                                            <Activity size={20} />
                                         </div>
-                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+                                    </div>
+                                    
+                                    <div className="flex-1 w-full h-full mt-4">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                <defs>
+                                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#ea580c" stopOpacity={0.3}/>
+                                                        <stop offset="95%" stopColor="#ea580c" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                    <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                
+                                                {/* minTickGap forces it to skip dates so the X-Axis doesn't get squished */}
+                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} dy={10} minTickGap={25} />
+                                                
+                                                {/* Left Axis for Revenue */}
+                                                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(value) => `₹${value}`} />
+                                                
+                                                {/* Right Axis for Orders */}
+                                                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                                                
+                                                <Tooltip 
+                                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                    formatter={(value, name) => {
+                                                        if (name === "Revenue") return [`₹${Number(value).toFixed(0)}`, "Revenue"];
+                                                        return [value, "Orders"];
+                                                    }}
+                                                />
+                                                <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
+                                                
+                                                <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#ea580c" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                                                <Area yAxisId="right" type="monotone" dataKey="orders" name="Orders" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorOrders)" />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                            </motion.div>
+                        )}
+
+                        {activeTab === "orders" && (
+                            <motion.div key="orders" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                <RestaurantOrders searchQuery={globalSearch} />
+                            </motion.div>
+                        )}
+
+                        {activeTab === "menu" && (
+                            <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                <RestaurantMenu searchQuery={globalSearch} />
+                            </motion.div>
+                        )}
+
+                        {activeTab === "profile" && (
+                            <motion.div key="profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl">
+                                <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col md:flex-row gap-8 items-start relative overflow-hidden">
+                                    <div className="w-32 h-32 rounded-2xl bg-gray-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg shrink-0 relative z-10">
+                                        {userData.profile_image ? (
+                                            <img src={userData.profile_image} alt="Profile" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <span className="text-4xl font-bold text-gray-300">{(userData.name || "R").charAt(0)}</span>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 relative z-10">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{userData.name}</h3>
+                                                <p className="text-gray-500 font-medium">@{userData.username}</p>
+                                            </div>
+                                            <button onClick={openEditModal} className="px-5 py-2.5 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg">
+                                                <Edit2 size={16} /> Edit Profile
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <DetailBox label="Email Address" value={userData.email} />
+                                            <DetailBox label="Account Status" value={userData.is_active ? "Active" : "Inactive"} isStatus />
+                                            <DetailBox label="Business Address" value={userData.address || "Not Provided"} className="md:col-span-2" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </main>
+
+                {/* --- EDIT MODAL --- */}
+                <AnimatePresence>
+                    {isEditModalOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+                                <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white">
+                                    <h3 className="font-bold text-xl text-gray-900">Edit Profile</h3>
+                                    <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20} className="text-gray-400" /></button>
+                                </div>
+                                
+                                <div className="p-8 max-h-[75vh] overflow-y-auto no-scrollbar space-y-6">
+                                    <div className="flex justify-center">
+                                        <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
+                                            <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-gray-100 bg-gray-50 shadow-inner">
+                                                {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><Camera size={32} /></div>}
+                                            </div>
+                                            <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white font-bold text-xs uppercase tracking-widest">Change</div>
+                                        </div>
+                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-5">
-                                        <FormInput label="Username" name="username" value={formData.username} onChange={handleInputChange} />
-                                        <FormInput label="Restaurant Name" name="name" value={formData.name} onChange={handleInputChange} />
+                                        <InputGroup label="Restaurant Name" name="name" value={formData.name} onChange={handleInputChange} />
+                                        <InputGroup label="Username" name="username" value={formData.username} onChange={handleInputChange} />
                                     </div>
-                                    <FormInput label="Email Address" name="email" value={formData.email} onChange={handleInputChange} type="email" />
-
+                                    <InputGroup label="Email" name="email" value={formData.email} onChange={handleInputChange} />
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                            Business Address
-                                        </label>
-                                        <textarea name="address" value={formData.address} onChange={handleInputChange} rows="2" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm font-semibold text-slate-800 resize-none outline-none" />
+                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Address</label>
+                                        <textarea name="address" value={formData.address} onChange={handleInputChange} rows="2" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none text-sm font-bold resize-none transition-all focus:bg-white" />
                                     </div>
-
-                                    <div className="pt-6 border-t border-dashed border-orange-100 grid grid-cols-2 gap-5">
-                                        <FormInput label="New Password" name="password" value={formData.password} onChange={handleInputChange} type="password" placeholder="Leave blank to keep" />
-                                        <FormInput label="Confirm Password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} type="password" />
+                                    <div className="grid grid-cols-2 gap-5 pt-4 border-t border-gray-100">
+                                        <InputGroup label="New Password" name="password" value={formData.password} onChange={handleInputChange} type="password" placeholder="Optional" />
+                                        <InputGroup label="Confirm" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} type="password" placeholder="Optional" />
                                     </div>
-                                </form>
-                            </div>
+                                </div>
 
-                            <div className="p-6 border-t border-orange-50 bg-white flex gap-3">
-                                <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors text-sm">Cancel</button>
-                                <button type="submit" form="profileForm" className="flex-1 py-3 bg-orange-500 text-white font-bold rounded-xl shadow-md shadow-orange-500/20 hover:bg-orange-600 hover:-translate-y-0.5 transition-all text-sm flex items-center justify-center gap-2"><Save size={18} /> Save Changes</button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
+                                <div className="p-6 border-t border-gray-100 flex gap-3 bg-gray-50">
+                                    <button onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3.5 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-100 transition-colors">Cancel</button>
+                                    <button onClick={handleSaveProfile} className="flex-1 py-3.5 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-lg"><Save size={18} /> Save Changes</button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </>
     );
 };
 
-// --- ELEGANT SUB-COMPONENTS ---
+// --- SUB COMPONENTS ---
+
 const NavItem = ({ icon: Icon, label, isActive, onClick, count }) => (
-    <button onClick={onClick} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all duration-200 group relative ${isActive ? "bg-orange-50 text-orange-600 font-bold shadow-sm border border-orange-100/50" : "text-slate-500 hover:bg-slate-50 font-medium border border-transparent"}`}>
-        {isActive && <motion.div layoutId="activeIndicator" className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-orange-500 rounded-r-full" />}
-        <div className="flex items-center gap-3 relative z-10 pl-1">
-            <Icon size={18} className={isActive ? "text-orange-500" : "text-slate-400 group-hover:text-orange-400 transition-colors"} />
-            <span>{label}</span>
+    <button onClick={onClick} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all duration-200 group relative ${isActive ? "bg-black text-white shadow-xl shadow-black/10" : "text-gray-500 hover:bg-gray-100 hover:text-black"}`}>
+        <div className="flex items-center gap-3">
+            <Icon size={18} className={isActive ? "text-orange-400" : "text-gray-400 group-hover:text-black"} />
+            <span className="font-bold text-sm">{label}</span>
         </div>
-        {count && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${isActive ? "bg-orange-200 text-orange-800" : "bg-slate-100 text-slate-500 group-hover:bg-orange-100 group-hover:text-orange-600 transition-colors"}`}>{count}</span>}
+        {count && <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${isActive ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}>{count}</span>}
     </button>
 );
 
-const DetailRow = ({ label, value, highlight }) => (
-    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 border-b border-slate-50 last:border-0">
-        <span className="text-sm font-medium text-slate-500 mb-1 sm:mb-0">{label}</span>
-        <span className={`text-sm font-bold text-right ${highlight ? "text-emerald-600" : "text-slate-900"}`}>{value || "—"}</span>
+const DetailBox = ({ label, value, isStatus, className }) => (
+    <div className={`p-5 bg-gray-50 rounded-2xl border border-gray-100 ${className}`}>
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{label}</p>
+        {isStatus ? (
+            <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wide ${value === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{value}</span>
+        ) : (
+            <p className="font-bold text-gray-900 text-sm leading-relaxed">{value}</p>
+        )}
     </div>
 );
 
-const Badge = ({ icon, label, bg = "bg-slate-50", border = "border-slate-200" }) => (
-    <span className={`flex items-center gap-1.5 text-xs font-semibold text-slate-600 ${bg} px-3 py-1.5 rounded-lg border ${border}`}>
-        {icon} {label}
-    </span>
-);
-
-const FormInput = ({ label, ...props }) => (
-    <div className="space-y-2 w-full">
-        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-            {label}
-        </label>
-        <input {...props} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none" />
+const InputGroup = ({ label, ...props }) => (
+    <div className="space-y-2">
+        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
+        <input {...props} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none text-sm font-bold transition-all focus:bg-white" />
     </div>
 );
 
-const ActionTile = ({ icon: Icon, title, desc, onClick }) => (
-    <button onClick={onClick} className="w-full flex items-center gap-4 p-4 bg-white border border-slate-100 hover:border-orange-200 hover:shadow-md hover:shadow-orange-500/5 rounded-xl transition-all duration-200 text-left group">
-        <div className="w-12 h-12 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-colors duration-200">
-            <Icon size={20} />
+const StatCard = ({ label, value, icon: Icon, color }) => (
+    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-5 hover:shadow-md transition-shadow">
+        <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-white shadow-lg ${color}`}>
+            <Icon size={24} />
         </div>
-        <div className="flex-1">
-            <h4 className="text-sm font-bold text-slate-900 group-hover:text-orange-600 transition-colors">{title}</h4>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">{desc}</p>
+        <div>
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
+            <p className="text-2xl font-black text-gray-900 mt-0.5">{value}</p>
         </div>
-        <ChevronRight size={18} className="text-slate-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all" />
-    </button>
+    </div>
 );
 
 export default RestaurantDashboard;

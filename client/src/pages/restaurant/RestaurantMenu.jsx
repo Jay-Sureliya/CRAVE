@@ -1,129 +1,63 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-    Plus, X, Image as ImageIcon, Leaf, Drumstick, Edit, Trash2,
-    Tag, UploadCloud, Eye, EyeOff, Check, Save, Loader2, Search,
-    ListPlus, Minus
-} from "lucide-react";
+import { Plus, X, Image as ImageIcon, Leaf, Drumstick, Edit, Trash2, UploadCloud, Eye, EyeOff, Loader2, ListPlus } from "lucide-react";
 
 // --- HELPER: Lazy Load Images ---
 const getImageUrl = (item) => {
     if (!item) return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
     if (typeof item === 'string' && item.startsWith('blob:')) return item;
-    if (item.image && (item.image.startsWith("data:") || item.image.startsWith("http"))) {
-        return item.image;
-    }
+    if (item.image && (item.image.startsWith("data:") || item.image.startsWith("http"))) return item.image;
     return `http://localhost:8000/api/menu/image/${item.id}`;
 };
 
-const RestaurantMenu = () => {
+const RestaurantMenu = ({ searchQuery }) => { 
     const [showModal, setShowModal] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const dropdownRef = useRef(null);
-
     const [isLoading, setIsLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [editId, setEditId] = useState(null);
-    const [searchTerm, setSearchTerm] = useState("");
-
     const [dbCategories, setDbCategories] = useState([]);
     const [menuItems, setMenuItems] = useState([]);
 
-    // --- FORM STATE ---
-    const initialFormState = {
-        name: "",
-        category: "",
-        description: "",
-        price: "",
-        discountPrice: "",
-        type: "veg",
-        isAvailable: true,
-        image: null,
-        addons: []
-    };
+    const initialFormState = { name: "", category: "", description: "", price: "", discountPrice: "", type: "veg", isAvailable: true, image: null, addons: [] };
     const [newItem, setNewItem] = useState(initialFormState);
     const [previewImage, setPreviewImage] = useState(null);
-
-    // --- TEMP STATE FOR ADDING ADDONS IN MODAL ---
     const [tempAddon, setTempAddon] = useState({ name: "", price: "" });
 
     const getAuthData = () => {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const resId = sessionStorage.getItem("restaurant_id") || localStorage.getItem("restaurant_id");
-        return {
-            headers: token ? { "Authorization": `Bearer ${token}` } : {},
-            restaurantId: resId
-        };
+        return { headers: token ? { "Authorization": `Bearer ${token}` } : {}, restaurantId: resId };
     };
 
     const fetchData = async () => {
         try {
             setIsLoading(true);
             const { headers } = getAuthData();
-
-            // Fetch Categories
             try {
                 const catRes = await fetch("http://localhost:8000/api/categories", { headers });
-                if (catRes.ok) {
-                    const catData = await catRes.json();
-                    setDbCategories(Array.isArray(catData) ? catData : []);
-                }
-            } catch (e) { console.error("Cat Fetch Error", e); }
+                if (catRes.ok) setDbCategories(await catRes.json());
+            } catch (e) { console.error(e); }
 
-            // Fetch Menu
             const menuRes = await fetch("http://localhost:8000/api/menu", { headers });
-            if (menuRes.ok) {
-                const menuData = await menuRes.json();
-                setMenuItems(Array.isArray(menuData) ? menuData : []);
-            } else {
-                console.error("Menu fetch failed", await menuRes.text());
-            }
-        } catch (error) {
-            console.error("Error fetching data:", error);
-        } finally {
-            setIsLoading(false);
-        }
+            if (menuRes.ok) setMenuItems(await menuRes.json());
+        } catch (error) { console.error(error); } 
+        finally { setIsLoading(false); }
     };
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
-    const handleAddNew = () => {
-        setNewItem(initialFormState);
-        setPreviewImage(null);
-        setIsEditing(false);
-        setEditId(null);
-        setShowModal(true);
-        setTempAddon({ name: "", price: "" });
-    };
+    const handleAddNew = () => { setNewItem(initialFormState); setPreviewImage(null); setIsEditing(false); setEditId(null); setShowModal(true); setTempAddon({ name: "", price: "" }); };
 
     const handleEdit = (item) => {
         let parsedAddons = [];
-        if (item.addons) {
-            try {
-                parsedAddons = typeof item.addons === 'string' ? JSON.parse(item.addons) : item.addons;
-            } catch (e) {
-                parsedAddons = [];
-            }
-        }
-
+        if (item.addons) { try { parsedAddons = typeof item.addons === 'string' ? JSON.parse(item.addons) : item.addons; } catch { parsedAddons = []; } }
         setNewItem({
-            name: item.name,
-            category: item.category,
-            description: item.description || "",
-            price: item.price,
+            name: item.name, category: item.category, description: item.description || "", price: item.price,
             discountPrice: item.discountPrice !== undefined ? item.discountPrice : (item.discount_price || ""),
-            type: item.is_veg ? "veg" : "non-veg",
-            isAvailable: item.isAvailable,
-            image: null,
-            addons: Array.isArray(parsedAddons) ? parsedAddons : []
+            type: item.is_veg ? "veg" : "non-veg", isAvailable: item.isAvailable, image: null, addons: Array.isArray(parsedAddons) ? parsedAddons : []
         });
-
-        setPreviewImage(getImageUrl(item));
-        setIsEditing(true);
-        setEditId(item.id);
-        setShowModal(true);
-        setTempAddon({ name: "", price: "" });
+        setPreviewImage(getImageUrl(item)); setIsEditing(true); setEditId(item.id); setShowModal(true);
     };
 
     const handleInputChange = (e) => {
@@ -134,293 +68,160 @@ const RestaurantMenu = () => {
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
-        if (file) {
-            setNewItem({ ...newItem, image: file });
-            setPreviewImage(URL.createObjectURL(file));
-        }
+        if (file) { setNewItem({ ...newItem, image: file }); setPreviewImage(URL.createObjectURL(file)); }
     };
 
     const addAddon = () => {
         if (!tempAddon.name || !tempAddon.price) return;
-        const newAddonObj = {
-            id: Date.now(),
-            name: tempAddon.name,
-            price: parseFloat(tempAddon.price)
-        };
-        setNewItem({ ...newItem, addons: [...newItem.addons, newAddonObj] });
+        setNewItem({ ...newItem, addons: [...newItem.addons, { id: Date.now(), name: tempAddon.name, price: parseFloat(tempAddon.price) }] });
         setTempAddon({ name: "", price: "" });
     };
 
-    const removeAddon = (id) => {
-        setNewItem({ ...newItem, addons: newItem.addons.filter(a => a.id !== id) });
-    };
-
-    const selectCategory = (cat) => {
-        setNewItem({ ...newItem, category: cat });
-        setShowSuggestions(false);
-    };
+    const removeAddon = (id) => { setNewItem({ ...newItem, addons: newItem.addons.filter(a => a.id !== id) }); };
+    const selectCategory = (cat) => { setNewItem({ ...newItem, category: cat }); setShowSuggestions(false); };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         const { headers, restaurantId } = getAuthData();
-
         const formData = new FormData();
-        formData.append("name", newItem.name);
-        formData.append("category", newItem.category);
-        formData.append("description", newItem.description);
-        formData.append("price", newItem.price);
-
-        if (newItem.discountPrice !== "" && newItem.discountPrice !== null) {
-            formData.append("discountPrice", newItem.discountPrice);
-        }
-
-        formData.append("type", newItem.type);
-        formData.append("isAvailable", newItem.isAvailable.toString());
-        formData.append("addons", JSON.stringify(newItem.addons));
-
+        Object.keys(newItem).forEach(key => {
+            if (key === 'addons') formData.append(key, JSON.stringify(newItem[key]));
+            else if (key === 'image') { if (newItem.image) formData.append(key, newItem.image); }
+            else if (key === 'isAvailable') formData.append(key, newItem.isAvailable.toString());
+            else if (newItem[key] !== null && newItem[key] !== "") formData.append(key, newItem[key]);
+        });
         if (restaurantId) formData.append("restaurant_id", restaurantId);
-        if (newItem.image) formData.append("image", newItem.image);
 
         try {
-            const url = isEditing
-                ? `http://localhost:8000/api/menu/${editId}`
-                : "http://localhost:8000/api/menu";
-
+            const url = isEditing ? `http://localhost:8000/api/menu/${editId}` : "http://localhost:8000/api/menu";
             const method = isEditing ? "PUT" : "POST";
-
-            const response = await fetch(url, {
-                method: method,
-                headers: headers,
-                body: formData
-            });
-
-            if (response.ok) {
-                setShowModal(false);
-                fetchData();
-            } else {
-                const err = await response.json();
-                alert("Failed: " + (err.detail || "Check console"));
-                console.error(err);
-            }
-        } catch (error) {
-            console.error("Connection Error:", error);
-        }
+            const response = await fetch(url, { method, headers, body: formData });
+            if (response.ok) { setShowModal(false); fetchData(); } else { alert("Failed"); }
+        } catch (error) { console.error(error); }
     };
 
-    // --- FIXED DELETE HANDLER ---
     const handleDelete = async (id) => {
         if (!window.confirm("Delete this item?")) return;
-
-        try {
-            const { headers } = getAuthData();
-            const response = await fetch(`http://localhost:8000/api/menu/${id}`, {
-                method: "DELETE",
-                headers: headers
-            });
-
-            if (response.ok) {
-                // Optimistically remove from UI immediately
-                setMenuItems(prev => prev.filter(item => item.id !== id));
-            } else {
-                // If 500 error, it might be database sync issue
-                const text = await response.text();
-                console.error("Delete failed:", text);
-                alert("Could not delete item. Please refresh and try again.");
-            }
-        } catch (error) {
-            console.error("Error deleting:", error);
-            alert("Network error while deleting.");
-        }
+        const { headers } = getAuthData();
+        const response = await fetch(`http://localhost:8000/api/menu/${id}`, { method: "DELETE", headers });
+        if (response.ok) setMenuItems(prev => prev.filter(item => item.id !== id));
     };
 
     const toggleStatus = async (item) => {
         const updatedStatus = !item.isAvailable;
-        // Optimistic UI update
         setMenuItems(menuItems.map(i => i.id === item.id ? { ...i, isAvailable: updatedStatus } : i));
-
-        try {
-            const { headers } = getAuthData();
-            const formData = new FormData();
-            formData.append("isAvailable", updatedStatus.toString());
-
-            await fetch(`http://localhost:8000/api/menu/${item.id}`, {
-                method: "PUT",
-                headers: headers,
-                body: formData
-            });
-        } catch (error) {
-            console.error("Error updating status:", error);
-            fetchData(); // Revert on error
-        }
+        const { headers } = getAuthData();
+        const formData = new FormData(); formData.append("isAvailable", updatedStatus.toString());
+        await fetch(`http://localhost:8000/api/menu/${item.id}`, { method: "PUT", headers, body: formData });
     };
 
-    const filteredItems = menuItems.filter(item =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase())
+    // --- FILTER LOGIC ---
+    const filteredItems = menuItems.filter(item => 
+        item.name.toLowerCase().includes(searchQuery?.toLowerCase() || "") ||
+        item.category.toLowerCase().includes(searchQuery?.toLowerCase() || "")
     );
 
     if (isLoading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-orange-500" size={40} /></div>;
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Menu Items</h2>
-                    <p className="text-slate-500 font-medium">Manage your dishes</p>
-                </div>
-                <div className="flex gap-3 w-full md:w-auto">
-                    <div className="relative flex-1 md:w-64 group">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 text-sm" />
-                    </div>
-                    <button onClick={handleAddNew} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors shadow-xl">
-                        <Plus size={18} /> Add Item
-                    </button>
-                </div>
+        <div className="space-y-6">
+            <div className="flex justify-between items-center mb-4">
+                <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{filteredItems.length} Dishes Found</p>
+                <button onClick={handleAddNew} className="flex items-center gap-2 bg-black text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors shadow-lg">
+                    <Plus size={18} /> Add New Item
+                </button>
             </div>
 
-            {/* GRID */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredItems.map((item) => (
-                    <div key={item.id} className={`group bg-white rounded-[2rem] p-4 border transition-all hover:shadow-xl ${!item.isAvailable ? 'opacity-75 bg-slate-50' : 'border-white'}`}>
-                        {/* Image Section */}
-                        <div className="h-48 bg-slate-100 rounded-[1.5rem] relative overflow-hidden mb-5">
-                            <img
-                                src={getImageUrl(item)}
-                                alt={item.name}
-                                loading="lazy"
-                                onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                                className="w-full h-full object-cover transition-opacity duration-300"
-                            />
-                            <div className="absolute inset-0 hidden items-center justify-center text-slate-300 bg-slate-100">
-                                <ImageIcon size={40} />
+                    <div key={item.id} className={`bg-white rounded-2xl border border-gray-200 p-4 hover:shadow-lg transition-all flex flex-col ${!item.isAvailable ? 'opacity-70 grayscale' : ''}`}>
+                        <div className="h-44 w-full bg-gray-100 rounded-xl relative overflow-hidden mb-4">
+                            <img src={getImageUrl(item)} alt={item.name} className="w-full h-full object-cover" />
+                            <div className="absolute top-3 left-3 flex gap-2">
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black text-white uppercase shadow-sm ${item.is_veg ? 'bg-green-500' : 'bg-red-500'}`}>{item.is_veg ? 'VEG' : 'NON'}</span>
                             </div>
-                            <div className="absolute top-4 left-4 flex gap-2">
-                                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black backdrop-blur-md shadow-sm flex items-center gap-1.5 ${item.is_veg ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
-                                    {item.is_veg ? <Leaf size={10} fill="currentColor" /> : <Drumstick size={10} fill="currentColor" />}
-                                    {item.is_veg ? 'VEG' : 'NON'}
-                                </span>
-                            </div>
-                            {!item.isAvailable && (
-                                <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
-                                    <span className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2"><EyeOff size={14} /> Offline</span>
-                                </div>
-                            )}
                         </div>
-                        {/* Details */}
-                        <div className="px-2 mb-5">
+                        
+                        <div className="flex-1 px-1">
                             <div className="flex justify-between items-start mb-2">
-                                <span className="text-[10px] font-black text-orange-500 uppercase bg-orange-50 px-2 py-1 rounded-md">{item.category}</span>
-                                <div className="text-right">
-                                    <span className="block text-lg font-black text-slate-800">₹{item.price}</span>
-                                    {(item.discountPrice || item.discount_price) && <span className="block text-xs font-bold text-slate-400 line-through">₹{item.discountPrice || item.discount_price}</span>}
-                                </div>
+                                <span className="text-[10px] font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg uppercase tracking-wide">{item.category}</span>
+                                <span className="font-black text-lg text-gray-900">₹{item.price}</span>
                             </div>
-                            <h3 className="text-xl font-bold text-slate-800 mb-1">{item.name}</h3>
-                            <p className="text-slate-400 text-sm line-clamp-2">{item.description}</p>
+                            <h3 className="font-bold text-gray-900 text-lg mb-1 leading-tight">{item.name}</h3>
+                            <p className="text-xs text-gray-500 line-clamp-2 mb-4 font-medium leading-relaxed">{item.description}</p>
                         </div>
-                        {/* Actions */}
-                        <div className="grid grid-cols-5 gap-2">
-                            <button onClick={() => toggleStatus(item)} className="col-span-2 h-10 rounded-xl flex items-center justify-center gap-2 font-bold text-xs bg-slate-100 text-slate-500 hover:bg-slate-200">
-                                {item.isAvailable ? <><Eye size={16} /> Live</> : <><EyeOff size={16} /> Offline</>}
+
+                        <div className="grid grid-cols-4 gap-2 pt-4 border-t border-gray-100 mt-auto">
+                            <button onClick={() => toggleStatus(item)} className={`col-span-2 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 ${item.isAvailable ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-black text-white hover:bg-gray-800'}`}>
+                                {item.isAvailable ? <><Eye size={14}/> Live</> : <><EyeOff size={14}/> Offline</>}
                             </button>
-                            <button onClick={() => handleEdit(item)} className="col-span-2 h-10 rounded-xl bg-blue-50 text-blue-600 font-bold text-xs hover:bg-blue-100 flex items-center justify-center gap-2"><Edit size={16} /> Edit</button>
-                            <button onClick={() => handleDelete(item.id)} className="col-span-1 h-10 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center"><Trash2 size={18} /></button>
+                            <button onClick={() => handleEdit(item)} className="col-span-1 p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 flex items-center justify-center"><Edit size={16} /></button>
+                            <button onClick={() => handleDelete(item.id)} className="col-span-1 p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 flex items-center justify-center"><Trash2 size={16} /></button>
                         </div>
                     </div>
                 ))}
             </div>
 
-            {/* MODAL */}
+            {/* Modal */}
             {showModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-                        <div className="bg-slate-900 px-8 py-6 flex justify-between items-center text-white sticky top-0 z-50">
-                            <h3 className="text-2xl font-bold">{isEditing ? "Edit Item" : "Add New Item"}</h3>
-                            <button onClick={() => setShowModal(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-full"><X size={20} /></button>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+                    <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl">
+                        <div className="bg-white px-8 py-6 border-b border-gray-100 sticky top-0 z-10 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-gray-900">{isEditing ? "Edit Menu Item" : "Create New Item"}</h3>
+                            <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20} className="text-gray-400"/></button>
                         </div>
-
-                        <div className="p-8 grid grid-cols-1 md:grid-cols-12 gap-10">
-                            {/* Left Col: Image & Type */}
-                            <div className="md:col-span-5 space-y-6">
-                                <label className="border-2 border-dashed rounded-3xl h-60 flex flex-col items-center justify-center cursor-pointer relative bg-slate-50 hover:bg-slate-100 overflow-hidden">
-                                    {previewImage ?
-                                        <img src={previewImage} className="w-full h-full object-cover" alt="Preview" /> :
-                                        <div className="flex flex-col items-center"><UploadCloud className="text-orange-500 mb-2" size={32} /><span className="text-sm font-bold text-slate-500">Upload Image</span></div>
-                                    }
+                        
+                        <div className="p-8 grid grid-cols-1 md:grid-cols-12 gap-8">
+                            {/* Image Section */}
+                            <div className="md:col-span-5 space-y-4">
+                                <label className="border-2 border-dashed border-gray-200 rounded-2xl h-56 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors bg-gray-50 overflow-hidden relative">
+                                    {previewImage ? <img src={previewImage} className="w-full h-full object-cover" /> : <div className="text-center text-gray-400"><UploadCloud size={32} className="mx-auto mb-2 text-orange-400"/>Upload Photo</div>}
                                     <input type="file" onChange={handleFileChange} accept="image/*" className="hidden" />
                                 </label>
-                                <div className="flex gap-2">
-                                    <button type="button" onClick={() => setNewItem({ ...newItem, isAvailable: true })} className={`flex-1 py-3 rounded-xl text-xs font-bold ${newItem.isAvailable ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Live</button>
-                                    <button type="button" onClick={() => setNewItem({ ...newItem, isAvailable: false })} className={`flex-1 py-3 rounded-xl text-xs font-bold ${!newItem.isAvailable ? 'bg-slate-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Offline</button>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button type="button" onClick={() => setNewItem({ ...newItem, type: 'veg' })} className={`flex-1 py-3 rounded-xl text-xs font-bold ${newItem.type === 'veg' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>Veg</button>
-                                    <button type="button" onClick={() => setNewItem({ ...newItem, type: 'non-veg' })} className={`flex-1 py-3 rounded-xl text-xs font-bold ${newItem.type === 'non-veg' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'}`}>Non-Veg</button>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button type="button" onClick={() => setNewItem({...newItem, isAvailable: !newItem.isAvailable})} className={`py-3 rounded-xl text-xs font-bold transition-all ${newItem.isAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                                        {newItem.isAvailable ? 'Status: Live' : 'Status: Hidden'}
+                                    </button>
+                                    <button type="button" onClick={() => setNewItem({...newItem, type: newItem.type === 'veg' ? 'non-veg' : 'veg'})} className={`py-3 rounded-xl text-xs font-bold transition-all ${newItem.type === 'veg' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        {newItem.type === 'veg' ? 'Veg' : 'Non-Veg'}
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* Right Col: Details & Addons */}
-                            <div className="md:col-span-7 space-y-5">
-                                <input type="text" name="name" value={newItem.name} onChange={handleInputChange} placeholder="Item Name" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-orange-500/20" />
-
+                            {/* Form Section */}
+                            <div className="md:col-span-7 space-y-4">
+                                <input name="name" value={newItem.name} onChange={handleInputChange} placeholder="Item Name" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none font-bold text-gray-800" />
                                 <div className="relative" ref={dropdownRef}>
-                                    <input type="text" name="category" value={newItem.category} onChange={handleInputChange} placeholder="Category" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-orange-500/20" />
-                                    {showSuggestions && newItem.category && (
-                                        <div className="absolute w-full bg-white border border-slate-100 rounded-xl shadow-xl mt-2 z-10 max-h-40 overflow-y-auto">
-                                            {dbCategories.filter(c => c.toLowerCase().includes(newItem.category.toLowerCase())).map((c, i) => (
-                                                <div key={i} onClick={() => selectCategory(c)} className="px-4 py-3 hover:bg-slate-50 cursor-pointer text-sm font-bold text-slate-600">{c}</div>
-                                            ))}
-                                        </div>
-                                    )}
+                                    <input name="category" value={newItem.category} onChange={handleInputChange} placeholder="Category" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none text-sm font-bold text-gray-800" />
+                                    {showSuggestions && newItem.category && <div className="absolute w-full bg-white border rounded-xl shadow-xl mt-1 z-20 max-h-32 overflow-y-auto">{dbCategories.filter(c => c.toLowerCase().includes(newItem.category.toLowerCase())).map((c, i) => <div key={i} onClick={() => selectCategory(c)} className="px-4 py-3 hover:bg-gray-50 cursor-pointer text-sm font-bold text-gray-600">{c}</div>)}</div>}
                                 </div>
-
-                                <textarea name="description" value={newItem.description} onChange={handleInputChange} placeholder="Description" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-medium text-slate-600 h-24 resize-none outline-none focus:ring-2 focus:ring-orange-500/20"></textarea>
-
+                                <textarea name="description" value={newItem.description} onChange={handleInputChange} placeholder="Description" rows="3" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none text-sm font-medium text-gray-600 resize-none"></textarea>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <input type="number" name="price" value={newItem.price} onChange={handleInputChange} placeholder="Price" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none" />
-                                    <input type="number" name="discountPrice" value={newItem.discountPrice} onChange={handleInputChange} placeholder="Discount Price" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold text-slate-700 outline-none" />
+                                    <input type="number" name="price" value={newItem.price} onChange={handleInputChange} placeholder="Price (₹)" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none font-bold" />
+                                    <input type="number" name="discountPrice" value={newItem.discountPrice} onChange={handleInputChange} placeholder="Discount (Optional)" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none font-bold" />
                                 </div>
 
-                                {/* --- CUSTOMIZATION SECTION --- */}
-                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                                    <h4 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><ListPlus size={16} /> Personalize / Add-ons</h4>
-
-                                    {/* List Existing Addons */}
-                                    <div className="space-y-2 mb-4">
-                                        {newItem.addons.map((addon) => (
-                                            <div key={addon.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                                                <span className="font-bold text-slate-700 text-sm">{addon.name}</span>
+                                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200">
+                                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><ListPlus size={14}/> Add-ons</h4>
+                                    <div className="flex gap-2 mb-3">
+                                        <input type="text" placeholder="Name" value={tempAddon.name} onChange={(e) => setTempAddon({...tempAddon, name: e.target.value})} className="flex-1 p-3 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-orange-500" />
+                                        <input type="number" placeholder="₹" value={tempAddon.price} onChange={(e) => setTempAddon({...tempAddon, price: e.target.value})} className="w-24 p-3 bg-white border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-orange-500" />
+                                        <button type="button" onClick={addAddon} className="p-3 bg-black text-white rounded-xl hover:bg-gray-800"><Plus size={20}/></button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {newItem.addons.map(addon => (
+                                            <div key={addon.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                                                <span className="font-bold text-gray-700 text-sm">{addon.name}</span>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="font-bold text-green-600 text-sm">+ ₹{addon.price}</span>
-                                                    <button type="button" onClick={() => removeAddon(addon.id)} className="text-slate-300 hover:text-red-500"><X size={16} /></button>
+                                                    <span className="font-bold text-green-600 text-sm">+₹{addon.price}</span>
+                                                    <button type="button" onClick={() => removeAddon(addon.id)} className="text-gray-300 hover:text-red-500"><X size={16}/></button>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
-
-                                    {/* Input New Addon */}
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            placeholder="Ex: Extra Cheese"
-                                            value={tempAddon.name}
-                                            onChange={(e) => setTempAddon({ ...tempAddon, name: e.target.value })}
-                                            className="flex-1 px-4 py-3 bg-white rounded-xl text-sm font-bold outline-none border border-slate-200 focus:border-orange-500"
-                                        />
-                                        <input
-                                            type="number"
-                                            placeholder="₹ Price"
-                                            value={tempAddon.price}
-                                            onChange={(e) => setTempAddon({ ...tempAddon, price: e.target.value })}
-                                            className="w-24 px-4 py-3 bg-white rounded-xl text-sm font-bold outline-none border border-slate-200 focus:border-orange-500"
-                                        />
-                                        <button type="button" onClick={addAddon} className="bg-slate-900 text-white p-3 rounded-xl hover:bg-orange-600 transition-colors"><Plus size={20} /></button>
-                                    </div>
                                 </div>
 
-                                <button onClick={handleSubmit} className="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-orange-600 transition-colors shadow-xl">
+                                <button onClick={handleSubmit} className="w-full py-4 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-colors shadow-lg">
                                     {isEditing ? "Update Item" : "Save Item"}
                                 </button>
                             </div>
