@@ -35,6 +35,12 @@ from app.models.rider import Rider # <--- MOVED TO TOP TO FIX CRASH
 from app.models.cart import Cart  # <--- ADDED IMPORT
 from app.models.contact import ContactInquiry
 
+#  For location
+# --- WEBSOCKET IMPORT ---
+from app.websocket_manager import manager
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from pydantic import BaseModel
+
 # 3. SCHEMAS
 from app.schemas.rider_request import RiderRequestCreate
 from app.schemas.user import UserCreate, UserUpdate, TokenResponse
@@ -226,6 +232,42 @@ def place_order(order_data: OrderCreate, current_user: dict = Depends(get_curren
         "currency": "INR"
     }
 
+
+@app.get("/api/orders/history")
+def get_order_history(
+    current_user: dict = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    # 1. Fetch only past orders (delivered or cancelled) for this specific user
+    #    Sorted by newest first
+    orders = db.query(Order).filter(
+        Order.user_id == current_user["id"],
+        Order.status.in_(["delivered", "cancelled"])
+    ).order_by(Order.created_at.desc()).all()
+    
+    response_data = []
+    for o in orders:
+        # 2. Format the items so React can easily read them
+        items_list = []
+        for item in o.items:
+            items_list.append({
+                "name": item.name,
+                "qty": getattr(item, "quantity", 1) # React expects 'qty'
+            })
+            
+        # 3. Build the final order dictionary
+        response_data.append({
+            "id": o.id,
+            "status": o.status,
+            "total_amount": o.total_amount,
+            "restaurant_name": o.restaurant.name if o.restaurant else "Unknown Restaurant",
+            "items": items_list,
+            "created_at": o.created_at.isoformat() if o.created_at else None
+        })
+        
+    return response_data
+
+
 # --- UPDATE VERIFICATION (Activate Order & Clear Cart) ---
 @app.post("/api/payments/verify")
 def verify_payment(data: PaymentVerification, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -293,8 +335,10 @@ def track_active_order(
         "status": order.status,
         "total": order.total_amount,
         "restaurant_name": order.restaurant.name if order.restaurant else "Restaurant",
-        "restaurant_location": {"lat": 22.3039, "lng": 70.8022},
-        "user_location": {"lat": 22.2980, "lng": 70.7950},
+        # 👇 ADD THESE TWO LINES 👇
+        "restaurant_address": order.restaurant.address if order.restaurant else "Rajkot, Gujarat",
+        "delivery_address": order.delivery_address,
+        
         "rider_location": {
             "lat": rider.current_latitude if order.rider_id and rider else None,
             "lng": rider.current_longitude if order.rider_id and rider else None
@@ -471,7 +515,9 @@ def get_rider_stats(current_user: dict = Depends(get_current_user), db: Session 
             "total": active_order.total_amount,
             "restaurant_name": active_order.restaurant.name if active_order.restaurant else "Unknown",
             "restaurant_address": active_order.restaurant.address if active_order.restaurant else "",
-            "delivery_address": active_order.delivery_address
+            "delivery_address": active_order.delivery_address,
+            # 👇 ADD THIS ONE LINE TO SEND ITEMS TO THE RIDER 👇
+            "items": [{"name": i.name, "qty": i.quantity} for i in active_order.items] 
         }
 
     # --- NEW: Calculate Average Rating ---
@@ -771,7 +817,7 @@ def format_items(items):
         "is_veg": item.is_veg, 
         "isAvailable": item.is_available, 
         "image": item.image,
-        "addons": item.addons # <--- ADD THIS LINE! This sends the addons to React!
+        "addons": item.addons
     } for item in items]
 
 @app.post("/api/restaurant-request")
@@ -1314,6 +1360,36 @@ def rate_rider(
         "rating": data.rating,
         "average_rating": round(avg_rating, 2)
     }
+
+
+@app.websocket("/api/ws/track/{order_id}")
+async def track_order_ws(websocket: WebSocket, order_id: int):
+    # Connect the customer to this specific order's "channel"
+    await manager.connect(websocket, order_id)
+    try:
+        while True:
+            # Keep the connection open. We just wait here. 
+            # If the customer's internet drops, it triggers the exception below.
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, order_id)
+
+
+# --- 2. THE RIDER LOCATION UPDATE ROUTE ---
+class LocationUpdate(BaseModel):
+    lat: float
+    lng: float
+
+@app.post("/api/orders/{order_id}/location")
+async def update_rider_location(order_id: int, location: LocationUpdate):
+    # 1. (Optional) Save this to your database if you want a historical route
+    # db_order.current_lat = location.lat
+    # db.commit()
+
+    # 2. Instantly beam the new coordinates to the customer!
+    await manager.broadcast_to_order(order_id, {"lat": location.lat, "lng": location.lng})
+    
+    return {"status": "success", "message": "Location broadcasted"}
     
 if __name__ == "__main__":
     import uvicorn

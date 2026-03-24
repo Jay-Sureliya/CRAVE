@@ -17,3 +17,8 @@ html::-webkit-scrollbar,
 body::-webkit-scrollbar {
   display: none;
 }
+
+/* --- LEAFLET SMOOTH MARKER --- */
+.leaflet-marker-icon {
+  transition: transform 0.5s linear !important;
+}

@@ -1,762 +1,302 @@
-// import React, { useState, useEffect } from 'react';
-// import { useNavigate } from 'react-router-dom';
-// import {
-//     Bike, LogOut, Package, ChevronRight, ChefHat,
-//     CheckCircle, Settings, X, Save, User, Mail, Phone, AtSign, MapPin, Navigation
-// } from 'lucide-react';
-// import api from '../services/api';
-
-// const RiderDashboard = () => {
-//     const navigate = useNavigate();
-
-//     // --- 1. Logic State (From Workable Code) ---
-//     const [isOnline, setIsOnline] = useState(false);
-//     const [stats, setStats] = useState({ earnings: 0, trips: 0 });
-//     const [activeOrder, setActiveOrder] = useState(null);
-//     const [availableOrders, setAvailableOrders] = useState([]);
-//     const [isInitializing, setIsInitializing] = useState(true);
-//     const [isProcessing, setIsProcessing] = useState(false);
-
-//     // --- 2. UI/Profile State (From New UI Code) ---
-//     const [riderProfile, setRiderProfile] = useState({
-//         username: '', name: '', email: '', phone: ''
-//     });
-//     const [isEditing, setIsEditing] = useState(false);
-//     const [editForm, setEditForm] = useState({
-//         username: '', full_name: '', email: '', phone: ''
-//     });
-//     const [isSaving, setIsSaving] = useState(false);
-
-//     // --- 3. Initial Fetch (Combines both logic & profile load) ---
-//     useEffect(() => {
-//         const fetchDashboardData = async () => {
-//             try {
-//                 // 1. Get Stats & Status (Logic)
-//                 const res = await api.get("/api/rider/stats");
-//                 setIsOnline(res.data.is_online);
-//                 setStats({
-//                     earnings: res.data.total_earnings || 0,
-//                     trips: res.data.total_trips || 0
-//                 });
-
-//                 if (res.data.active_order) {
-//                     setActiveOrder(res.data.active_order);
-//                 }
-
-//                 // 2. Get Profile Data (For UI)
-//                 // Note: Ensure your backend sends these fields, or fallback to defaults
-//                 const profile = {
-//                     username: res.data.username || 'rider',
-//                     name: res.data.name || 'Rider Profile',
-//                     email: res.data.email || 'rider@example.com',
-//                     phone: res.data.phone || ''
-//                 };
-//                 setRiderProfile(profile);
-//                 setEditForm({
-//                     username: profile.username,
-//                     full_name: profile.name,
-//                     email: profile.email,
-//                     phone: profile.phone
-//                 });
-
-//             } catch (err) {
-//                 console.error("Failed to load rider stats", err);
-//             } finally {
-//                 setIsInitializing(false);
-//             }
-//         };
-//         fetchDashboardData();
-//     }, []);
-
-//     // --- 4. THE SERIOUS LOGIC FIX: SYNC STATUS (From Workable Code) ---
-//     useEffect(() => {
-//         if (!isOnline) return;
-
-//         const syncData = async () => {
-//             try {
-//                 // Fetch latest state from backend
-//                 const res = await api.get("/api/rider/stats");
-//                 const backendOrder = res.data.active_order;
-
-//                 if (backendOrder) {
-//                     // Update frontend if status changed (e.g., 'accepted' -> 'ready')
-//                     // This is what fixes the "stuck" problem
-//                     if (!activeOrder || backendOrder.status !== activeOrder.status || backendOrder.id !== activeOrder.id) {
-//                         setActiveOrder(backendOrder);
-//                     }
-//                 } else {
-//                     // No active order? Clear the state and look for new ones
-//                     setActiveOrder(null);
-//                     const availableRes = await api.get("/api/rider/orders/available");
-//                     setAvailableOrders(availableRes.data);
-//                 }
-//             } catch (e) {
-//                 console.error("Sync error", e);
-//             }
-//         };
-
-//         syncData();
-//         const interval = setInterval(syncData, 4000); // Check every 4 seconds
-//         return () => clearInterval(interval);
-//     }, [isOnline, activeOrder?.status]); // Dependency array matching workable logic
-
-//     // --- 5. Handlers ---
-
-//     const toggleOnline = async () => {
-//         const newState = !isOnline;
-//         setIsOnline(newState);
-//         try {
-//             await api.post("/api/rider/status", { is_online: newState });
-//         } catch (err) {
-//             setIsOnline(!newState);
-//             alert("Connection failed.");
-//         }
-//     };
-
-//     const handleAccept = async (order) => {
-//         setIsProcessing(true);
-//         try {
-//             await api.post(`/api/rider/orders/${order.id}/accept`);
-//             setActiveOrder({ ...order, status: 'accepted' });
-//             setAvailableOrders([]);
-//         } catch (e) {
-//             alert("Order taken by someone else.");
-//         } finally {
-//             setIsProcessing(false);
-//         }
-//     };
-
-//     const handlePickup = async () => {
-//         setIsProcessing(true);
-//         try {
-//             await api.post(`/api/rider/orders/${activeOrder.id}/pickup`);
-//             setActiveOrder(prev => ({ ...prev, status: 'out_for_delivery' }));
-//         } catch (e) {
-//             alert("Update failed.");
-//         } finally {
-//             setIsProcessing(false);
-//         }
-//     };
-
-//     const handleComplete = async () => {
-//         setIsProcessing(true);
-//         try {
-//             const res = await api.post(`/api/rider/orders/${activeOrder.id}/complete`);
-//             setStats(prev => ({
-//                 earnings: res.data.total_earnings,
-//                 trips: prev.trips + 1
-//             }));
-//             alert(`Job Done! Earned ₹${res.data.earned}`);
-//             setActiveOrder(null);
-//         } catch (e) {
-//             alert("Error completing order.");
-//         } finally {
-//             setIsProcessing(false);
-//         }
-//     };
-
-//     const handleSaveProfile = async (e) => {
-//         e.preventDefault();
-//         setIsSaving(true);
-//         try {
-//             // Ensure you have this endpoint in main.py, or update purely locally for now
-//             const res = await api.put("/api/rider/profile", editForm);
-//             setRiderProfile({
-//                 username: res.data.username, name: res.data.name,
-//                 email: res.data.email, phone: res.data.phone
-//             });
-//             setIsEditing(false);
-//             alert("Profile Updated!");
-//         } catch (err) {
-//             // Fallback for UI demo if endpoint doesn't exist yet
-//             console.warn("Backend profile update failed/missing, updating UI only");
-//             setRiderProfile({
-//                 username: editForm.username, name: editForm.full_name,
-//                 email: editForm.email, phone: editForm.phone
-//             });
-//             setIsEditing(false);
-//         } finally {
-//             setIsSaving(false);
-//         }
-//     };
-
-//     const handleLogout = () => {
-//         localStorage.clear();
-//         navigate('/login');
-//     };
-
-//     const getInitials = (name) => name ? name.substring(0, 2).toUpperCase() : 'RI';
-
-//     if (isInitializing) return <div className="min-h-screen flex items-center justify-center bg-stone-50"><Bike className="animate-bounce text-stone-300" size={48} /></div>;
-
-//     return (
-//         <div className="min-h-screen bg-stone-50 font-sans text-stone-800 pb-20 relative">
-
-//             {/* HEADER (New UI) */}
-//             <header className="bg-stone-900 text-white px-6 py-5 rounded-b-[2rem] shadow-xl sticky top-0 z-20">
-//                 <div className="flex justify-between items-center mb-6">
-//                     <div className="flex items-center gap-3">
-//                         <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-stone-900 font-bold text-lg border-2 border-stone-800 shadow-lg shadow-emerald-900/20">
-//                             {getInitials(riderProfile.name)}
-//                         </div>
-//                         <div>
-//                             <h1 className="font-bold text-lg leading-tight">{riderProfile.name}</h1>
-//                             <p className="text-xs text-stone-400">@{riderProfile.username}</p>
-//                         </div>
-//                     </div>
-//                     <div className="flex gap-2">
-//                         <button onClick={() => setIsEditing(true)} className="p-2.5 bg-stone-800 rounded-full text-stone-400 hover:text-white transition-colors">
-//                             <Settings size={20} />
-//                         </button>
-//                         <button onClick={handleLogout} className="p-2.5 bg-stone-800 rounded-full text-red-400 hover:bg-red-900/30 transition-colors">
-//                             <LogOut size={20} />
-//                         </button>
-//                     </div>
-//                 </div>
-//                 <div className="grid grid-cols-2 gap-3">
-//                     <div className="bg-white/10 p-4 rounded-2xl border border-white/5 backdrop-blur-sm">
-//                         <p className="text-stone-400 text-[10px] font-bold uppercase tracking-wider">Earnings</p>
-//                         <h3 className="text-2xl font-black text-emerald-400 mt-1">₹{stats.earnings.toFixed(2)}</h3>
-//                     </div>
-//                     <div className="bg-white/10 p-4 rounded-2xl border border-white/5 backdrop-blur-sm">
-//                         <p className="text-stone-400 text-[10px] font-bold uppercase tracking-wider">Trips</p>
-//                         <h3 className="text-2xl font-black text-white mt-1">{stats.trips}</h3>
-//                     </div>
-//                 </div>
-//             </header>
-
-//             {/* MAIN CONTENT */}
-//             <main className="p-6 max-w-lg mx-auto space-y-6">
-
-//                 {/* Online Toggle */}
-//                 {!activeOrder && (
-//                     <button onClick={toggleOnline} className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider shadow-lg transform active:scale-95 transition-all ${isOnline ? 'bg-white text-rose-500 border border-rose-100' : 'bg-emerald-500 text-white shadow-emerald-200 hover:bg-emerald-600'}`}>
-//                         {isOnline ? 'Stop Receiving' : 'Go Online'}
-//                     </button>
-//                 )}
-
-//                 {/* Empty State */}
-//                 {isOnline && !activeOrder && availableOrders.length === 0 && (
-//                     <div className="text-center py-10 opacity-50">
-//                         <div className="animate-pulse mb-3 flex justify-center"><Navigation size={40} className="text-stone-300" /></div>
-//                         <p className="text-sm font-bold text-stone-400">Scanning area...</p>
-//                     </div>
-//                 )}
-
-//                 {/* ACTIVE ORDER CARD */}
-//                 {activeOrder && (
-//                     <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-orange-100 relative overflow-hidden animate-in slide-in-from-bottom duration-500">
-//                         <div className={`absolute top-0 left-0 h-1.5 bg-orange-500 transition-all duration-1000 ${activeOrder.status === 'out_for_delivery' ? 'w-full' : 'w-1/2'}`} />
-
-//                         <div className="flex justify-between items-center mb-6 mt-1">
-//                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${activeOrder.status === 'ready' ? 'bg-emerald-100 text-emerald-700' :
-//                                 activeOrder.status === 'out_for_delivery' ? 'bg-orange-100 text-orange-700' : 'bg-blue-50 text-blue-600'
-//                                 }`}>
-//                                 {activeOrder.status === 'out_for_delivery' ? 'On The Way' : activeOrder.status === 'ready' ? 'Pickup Ready' : 'Accepted'}
-//                             </span>
-//                             <span className="font-black text-lg text-stone-300">#{activeOrder.id}</span>
-//                         </div>
-
-//                         <div className="space-y-6 mb-8">
-//                             <div className="relative pl-5 border-l-2 border-orange-500">
-//                                 <div className="absolute -left-[9px] top-0 w-4 h-4 bg-orange-500 rounded-full border-2 border-white" />
-//                                 <h3 className="font-bold text-lg text-stone-800">{activeOrder.restaurant_name}</h3>
-//                                 <p className="text-xs text-stone-500">{activeOrder.restaurant_address}</p>
-//                             </div>
-//                             <div className="relative pl-5 border-l-2 border-stone-200">
-//                                 <div className="absolute -left-[9px] top-0 w-4 h-4 bg-stone-300 rounded-full border-2 border-white" />
-//                                 <p className="text-sm font-medium text-stone-600">{activeOrder.delivery_address}</p>
-//                             </div>
-//                         </div>
-
-//                         {activeOrder.status !== 'out_for_delivery' ? (
-//                             <button onClick={handlePickup} disabled={activeOrder.status !== 'ready' || isProcessing} className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all ${activeOrder.status === 'ready' ? 'bg-stone-900 text-white active:scale-95' : 'bg-stone-100 text-stone-400 cursor-not-allowed'}`}>
-//                                 <Package size={20} /> {activeOrder.status === 'ready' ? (isProcessing ? 'Verifying...' : 'Confirm Pickup') : 'Waiting for Food...'}
-//                             </button>
-//                         ) : (
-//                             <button onClick={handleComplete} disabled={isProcessing} className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 active:scale-95 hover:bg-emerald-600">
-//                                 {isProcessing ? 'Completing...' : <><CheckCircle size={20} /> Complete Delivery</>}
-//                             </button>
-//                         )}
-//                     </div>
-//                 )}
-
-//                 {/* AVAILABLE ORDERS LIST */}
-//                 {!activeOrder && isOnline && availableOrders.map(order => (
-//                     <div key={order.id} className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-stone-100 hover:shadow-md transition-all transform hover:-translate-y-1">
-//                         <div className="flex justify-between items-start mb-4">
-//                             <div className="flex items-center gap-3">
-//                                 <div className={`p-2.5 rounded-xl ${order.status === 'ready' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-//                                     {order.status === 'ready' ? <Package size={20} /> : <ChefHat size={20} />}
-//                                 </div>
-//                                 <div>
-//                                     <h4 className="font-bold text-sm text-stone-800">{order.restaurant_name}</h4>
-//                                     <div className="flex items-center gap-1 text-xs text-stone-400 mt-0.5">
-//                                         <MapPin size={10} />
-//                                         <span>2.5km • </span>
-//                                         <span className="uppercase font-bold">{order.status === 'ready' ? "Ready" : "Preparing"}</span>
-//                                     </div>
-//                                 </div>
-//                             </div>
-//                             <div className="text-right">
-//                                 <span className="block font-black text-lg text-emerald-600">₹{(order.total * 0.10).toFixed(0)}</span>
-//                             </div>
-//                         </div>
-
-//                         <div className="bg-stone-50 p-3 rounded-xl mb-4 border border-stone-100">
-//                             <p className="text-xs font-bold text-stone-400 uppercase mb-1">Deliver To</p>
-//                             <p className="text-xs text-stone-600 line-clamp-1">{order.delivery_address}</p>
-//                         </div>
-
-//                         <button onClick={() => handleAccept(order)} disabled={isProcessing} className="w-full py-3.5 bg-stone-900 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-black transition-colors">
-//                             Accept Order <ChevronRight size={16} />
-//                         </button>
-//                     </div>
-//                 ))}
-//             </main>
-
-//             {/* --- EDIT MODAL --- */}
-//             {isEditing && (
-//                 <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-stone-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-//                     <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
-//                         <div className="flex justify-between items-center mb-6">
-//                             <h2 className="text-xl font-bold text-stone-800">Edit Profile</h2>
-//                             <button onClick={() => setIsEditing(false)} className="p-2 bg-stone-100 rounded-full text-stone-500 hover:bg-stone-200"><X size={20} /></button>
-//                         </div>
-//                         <form onSubmit={handleSaveProfile} className="space-y-4">
-//                             <div className="space-y-1.5">
-//                                 <label className="text-xs font-bold text-stone-400 ml-1">Username</label>
-//                                 <div className="relative">
-//                                     <AtSign className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-//                                     <input type="text" required value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-stone-50 border-2 border-stone-100 rounded-2xl focus:outline-none focus:border-stone-900 font-medium text-stone-800" placeholder="username" />
-//                                 </div>
-//                             </div>
-//                             <div className="space-y-1.5">
-//                                 <label className="text-xs font-bold text-stone-400 ml-1">Full Name</label>
-//                                 <div className="relative">
-//                                     <User className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-//                                     <input type="text" required value={editForm.full_name} onChange={e => setEditForm({ ...editForm, full_name: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-stone-50 border-2 border-stone-100 rounded-2xl focus:outline-none focus:border-stone-900 font-medium text-stone-800" placeholder="Full Name" />
-//                                 </div>
-//                             </div>
-//                             <div className="space-y-1.5">
-//                                 <label className="text-xs font-bold text-stone-400 ml-1">Email</label>
-//                                 <div className="relative">
-//                                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-//                                     <input type="email" required value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-stone-50 border-2 border-stone-100 rounded-2xl focus:outline-none focus:border-stone-900 font-medium text-stone-800" placeholder="email" />
-//                                 </div>
-//                             </div>
-//                             <div className="space-y-1.5">
-//                                 <label className="text-xs font-bold text-stone-400 ml-1">Phone</label>
-//                                 <div className="relative">
-//                                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-//                                     <input type="tel" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-stone-50 border-2 border-stone-100 rounded-2xl focus:outline-none focus:border-stone-900 font-medium text-stone-800" placeholder="Phone" />
-//                                 </div>
-//                             </div>
-//                             <button type="submit" disabled={isSaving} className="w-full py-4 bg-stone-900 text-white rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 mt-4 active:scale-95 transition-all hover:bg-black">
-//                                 {isSaving ? 'Saving...' : <><Save size={20} /> Save Changes</>}
-//                             </button>
-//                         </form>
-//                     </div>
-//                 </div>
-//             )}
-//         </div>
-//     );
-// };
-
-// export default RiderDashboard;
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Bike, LogOut, Package, ChevronRight, ChefHat,
-    CheckCircle, Settings, X, Save, User, Mail, Phone, AtSign, MapPin, Navigation, MessageSquare, Star
+    LogOut, Package, ChevronRight, 
+    Settings, X, Save, User, Mail, Phone, AtSign, MapPin, 
+    Navigation, MessageSquare, Star, Power, Map, Navigation2, Store,
+    ChefHat, CheckCircle, PhoneCall
 } from 'lucide-react';
 import api from '../services/api';
+
+// --- SMART GEOCODER ---
+const geocodeAddress = async (address) => {
+    if (!address) return [22.3039, 70.8022];
+    try {
+        let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+        let data = await res.json();
+        if (data && data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+
+        const cleaned = address.replace(/[0-9]/g, '').trim();
+        res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleaned)}&limit=1`);
+        data = await res.json();
+        if (data && data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    } catch (e) { }
+
+    let hash = 0;
+    for (let i = 0; i < address.length; i++) hash = address.charCodeAt(i) + ((hash << 5) - hash);
+    return [22.3039 + ((hash % 100) / 2500), 70.8022 + (((hash >> 2) % 100) / 2500)];
+};
 
 const RiderDashboard = () => {
     const navigate = useNavigate();
 
-    // --- 1. Logic State ---
     const [isOnline, setIsOnline] = useState(false);
-    // NEW: Added rating to stats
     const [stats, setStats] = useState({ earnings: 0, trips: 0, message: null, rating: 0 });
     const [activeOrder, setActiveOrder] = useState(null);
     const [availableOrders, setAvailableOrders] = useState([]);
     const [isInitializing, setIsInitializing] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
+    
+    const [isSimulating, setIsSimulating] = useState(false);
+    const [arrived, setArrived] = useState(false); 
 
-    // --- 2. UI/Profile State ---
-    const [riderProfile, setRiderProfile] = useState({
-        username: '', name: '', email: '', phone: ''
-    });
+    const [riderProfile, setRiderProfile] = useState({ username: '', name: '', email: '', phone: '' });
     const [isEditing, setIsEditing] = useState(false);
-    const [editForm, setEditForm] = useState({
-        username: '', full_name: '', email: '', phone: ''
-    });
+    const [editForm, setEditForm] = useState({ username: '', full_name: '', email: '', phone: '' });
     const [isSaving, setIsSaving] = useState(false);
 
-    // --- 3. Initial Fetch ---
+    const watchIdRef = useRef(null);
+    const simulationIntervalRef = useRef(null);
+
+    const canTrackLocation = activeOrder && activeOrder.status === 'out_for_delivery';
+
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
-                // 1. Get Stats & Status
                 const res = await api.get("/api/rider/stats");
                 setIsOnline(res.data.is_online);
                 setStats({
-                    earnings: res.data.total_earnings || 0,
-                    trips: res.data.total_trips || 0,
-                    message: res.data.message || null,
-                    rating: res.data.rating || 0 // NEW: Fetch rating
+                    earnings: res.data.total_earnings || 0, trips: res.data.total_trips || 0,
+                    message: res.data.message || null, rating: res.data.rating || 0
                 });
-
-                if (res.data.active_order) {
-                    setActiveOrder(res.data.active_order);
-                }
-
-                // 2. Get Profile Data
-                const profile = {
-                    username: res.data.username || 'rider',
-                    name: res.data.name || 'Rider Profile',
-                    email: res.data.email || 'rider@example.com',
-                    phone: res.data.phone || ''
-                };
-                setRiderProfile(profile);
-                setEditForm({
-                    username: profile.username,
-                    full_name: profile.name,
-                    email: profile.email,
-                    phone: profile.phone
+                if (res.data.active_order) setActiveOrder(res.data.active_order);
+                setRiderProfile({
+                    username: res.data.username || 'rider', name: res.data.name || 'Rider Profile',
+                    email: res.data.email || 'rider@example.com', phone: res.data.phone || ''
                 });
-
-            } catch (err) {
-                console.error("Failed to load rider stats", err);
-            } finally {
-                setIsInitializing(false);
-            }
+            } catch (err) {} 
+            finally { setIsInitializing(false); }
         };
         fetchDashboardData();
     }, []);
 
-    // --- 4. SYNC STATUS ---
     useEffect(() => {
         if (!isOnline) return;
-
         const syncData = async () => {
             try {
-                // Fetch latest state from backend
                 const res = await api.get("/api/rider/stats");
                 const backendOrder = res.data.active_order;
-
-                // Sync the message and rating in real-time
-                setStats(prev => ({
-                    ...prev,
-                    message: res.data.message || null,
-                    rating: res.data.rating || prev.rating
-                }));
+                setStats(prev => ({ ...prev, message: res.data.message || null, rating: res.data.rating || prev.rating }));
 
                 if (backendOrder) {
-                    // Update frontend if status changed
                     if (!activeOrder || backendOrder.status !== activeOrder.status || backendOrder.id !== activeOrder.id) {
                         setActiveOrder(backendOrder);
                     }
                 } else {
-                    // No active order? Clear the state and look for new ones
-                    setActiveOrder(null);
+                    setActiveOrder(null); setArrived(false); setIsSimulating(false);
                     const availableRes = await api.get("/api/rider/orders/available");
                     setAvailableOrders(availableRes.data);
                 }
-            } catch (e) {
-                console.error("Sync error", e);
-            }
+            } catch (e) {}
         };
-
         syncData();
         const interval = setInterval(syncData, 4000);
         return () => clearInterval(interval);
     }, [isOnline, activeOrder?.status]);
 
-    // --- 5. Handlers ---
 
-    const toggleOnline = async () => {
-        const newState = !isOnline;
-        setIsOnline(newState);
-        try {
-            await api.post("/api/rider/status", { is_online: newState });
-        } catch (err) {
-            setIsOnline(!newState);
-            alert("Connection failed.");
+    /* ================= AUTOMATIC DYNAMIC SIMULATOR ================= */
+    useEffect(() => {
+        if (canTrackLocation && !isSimulating && !arrived) {
+            const startAutoDrive = async () => {
+                setIsSimulating(true);
+                setArrived(false);
+                
+                // Fetch dynamic coordinates dynamically exactly like the customer app
+                const startLoc = await geocodeAddress(activeOrder.restaurant_address);
+                const endLoc = await geocodeAddress(activeOrder.delivery_address);
+                
+                try {
+                    const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${startLoc[1]},${startLoc[0]};${endLoc[1]},${endLoc[0]}?overview=full&geometries=geojson`);
+                    const data = await response.json();
+                    
+                    if (data.routes && data.routes.length > 0) {
+                        const coords = data.routes[0].geometry.coordinates;
+                        const totalDuration = 20000; 
+                        const intervalTime = 500; 
+                        const totalSteps = totalDuration / intervalTime; 
+                        let currentStep = 0;
+                        
+                        simulationIntervalRef.current = setInterval(async () => {
+                            if (currentStep >= totalSteps) {
+                                clearInterval(simulationIntervalRef.current);
+                                setArrived(true); 
+                                setIsSimulating(false);
+                                return;
+                            }
+                            
+                            const progress = currentStep / totalSteps;
+                            const index = Math.floor(progress * (coords.length - 1));
+                            
+                            try { await api.post(`/api/orders/${activeOrder.id}/location`, { lat: coords[index][1], lng: coords[index][0] }); } catch(e) {}
+                            currentStep++;
+                        }, intervalTime);
+                    }
+                } catch (err) {
+                    setIsSimulating(false);
+                }
+            };
+            
+            startAutoDrive();
         }
-    };
 
+        return () => {
+            if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
+        };
+    }, [activeOrder?.status]); 
+
+
+    // --- Handlers ---
+    const toggleOnline = async () => {
+        const newState = !isOnline; setIsOnline(newState);
+        try { await api.post("/api/rider/status", { is_online: newState }); } catch (err) { setIsOnline(!newState); }
+    };
     const handleAccept = async (order) => {
         setIsProcessing(true);
-        try {
-            await api.post(`/api/rider/orders/${order.id}/accept`);
-            setActiveOrder({ ...order, status: 'accepted' });
-            setAvailableOrders([]);
-        } catch (e) {
-            alert("Order taken by someone else.");
-        } finally {
-            setIsProcessing(false);
-        }
+        try { await api.post(`/api/rider/orders/${order.id}/accept`); setActiveOrder({ ...order, status: 'accepted' }); setAvailableOrders([]); } 
+        catch (e) {} finally { setIsProcessing(false); }
     };
-
     const handlePickup = async () => {
         setIsProcessing(true);
-        try {
-            await api.post(`/api/rider/orders/${activeOrder.id}/pickup`);
-            setActiveOrder(prev => ({ ...prev, status: 'out_for_delivery' }));
-        } catch (e) {
-            alert("Update failed.");
-        } finally {
-            setIsProcessing(false);
-        }
+        try { await api.post(`/api/rider/orders/${activeOrder.id}/pickup`); setActiveOrder(prev => ({ ...prev, status: 'out_for_delivery' })); } 
+        catch (e) {} finally { setIsProcessing(false); }
     };
-
     const handleComplete = async () => {
         setIsProcessing(true);
         try {
             const res = await api.post(`/api/rider/orders/${activeOrder.id}/complete`);
-            setStats(prev => ({
-                ...prev,
-                earnings: res.data.total_earnings,
-                trips: prev.trips + 1,
-                message: null // Clear message when order is done
-            }));
+            setStats(prev => ({ ...prev, earnings: res.data.total_earnings, trips: prev.trips + 1, message: null }));
             alert(`Job Done! Earned ₹${res.data.earned}`);
-            setActiveOrder(null);
-        } catch (e) {
-            alert("Error completing order.");
-        } finally {
-            setIsProcessing(false);
-        }
+            setActiveOrder(null); setIsSimulating(false); setArrived(false);
+        } catch (e) {} finally { setIsProcessing(false); }
     };
-
     const handleSaveProfile = async (e) => {
-        e.preventDefault();
-        setIsSaving(true);
+        e.preventDefault(); setIsSaving(true);
         try {
             const res = await api.put("/api/rider/profile", editForm);
-            setRiderProfile({
-                username: res.data.username, name: res.data.name,
-                email: res.data.email, phone: res.data.phone
-            });
+            setRiderProfile({ username: res.data.username, name: res.data.name, email: res.data.email, phone: res.data.phone });
             setIsEditing(false);
-            alert("Profile Updated!");
         } catch (err) {
-            console.warn("Backend profile update failed/missing, updating UI only");
-            setRiderProfile({
-                username: editForm.username, name: editForm.full_name,
-                email: editForm.email, phone: editForm.phone
-            });
+            setRiderProfile({ username: editForm.username, name: editForm.full_name, email: editForm.email, phone: editForm.phone });
             setIsEditing(false);
-        } finally {
-            setIsSaving(false);
-        }
+        } finally { setIsSaving(false); }
     };
-
     const handleLogout = () => {
-        localStorage.clear();
-        navigate('/login');
+        if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+        if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
+        localStorage.clear(); sessionStorage.clear(); navigate('/login');
     };
 
-    const getInitials = (name) => name ? name.substring(0, 2).toUpperCase() : 'RI';
-
-    if (isInitializing) return <div className="min-h-screen flex items-center justify-center bg-stone-50"><Bike className="animate-bounce text-stone-300" size={48} /></div>;
+    if (isInitializing) return <div className="h-screen w-screen flex flex-col items-center justify-center bg-white"><div className="w-12 h-12 border-4 border-slate-200 rounded-full animate-spin border-t-[#E23744]"></div></div>;
 
     return (
-        <div className="min-h-screen bg-stone-50 font-sans text-stone-800 pb-20 relative">
+        <div className="h-screen w-full bg-slate-100 flex flex-col relative overflow-hidden font-sans selection:bg-red-100">
+            <div className={`absolute inset-0 z-0 transition-opacity duration-1000 ${isOnline ? 'opacity-100' : 'opacity-30 grayscale'}`}>
+                <div className="absolute inset-0 bg-[#f0f3f5]" style={{ backgroundImage: 'radial-gradient(#d1d5db 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+                {isOnline && !activeOrder && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+                        <div className="absolute w-64 h-64 bg-[#E23744]/10 rounded-full animate-ping" style={{ animationDuration: '3s' }}></div>
+                        <div className="absolute w-32 h-32 bg-[#E23744]/20 rounded-full animate-pulse"></div>
+                        <div className="relative w-12 h-12 bg-[#E23744] rounded-full flex items-center justify-center text-white shadow-xl border-4 border-white"><Navigation2 size={24} className="fill-white" /></div>
+                    </div>
+                )}
+            </div>
 
-            {/* HEADER */}
-            <header className="bg-stone-900 text-white px-6 py-5 rounded-b-[2rem] shadow-xl sticky top-0 z-20">
-                <div className="flex justify-between items-center mb-6">
+            <div className="relative z-20 bg-white shadow-sm border-b border-slate-200">
+                <div className="flex justify-between items-center px-4 py-3">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-stone-900 font-bold text-lg border-2 border-stone-800 shadow-lg shadow-emerald-900/20">
-                            {getInitials(riderProfile.name)}
-                        </div>
-                        <div>
-                            <h1 className="font-bold text-lg leading-tight">{riderProfile.name}</h1>
-                            <p className="text-xs text-stone-400">@{riderProfile.username}</p>
-                        </div>
+                        <button onClick={() => setIsEditing(true)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 active:scale-95"><User size={20} className="text-slate-600" /></button>
+                        <div><h2 className="text-lg font-black text-slate-800 leading-none">{riderProfile.name}</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Duty Profile</p></div>
                     </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => setIsEditing(true)} className="p-2.5 bg-stone-800 rounded-full text-stone-400 hover:text-white transition-colors">
-                            <Settings size={20} />
-                        </button>
-                        <button onClick={handleLogout} className="p-2.5 bg-stone-800 rounded-full text-red-400 hover:bg-red-900/30 transition-colors">
-                            <LogOut size={20} />
-                        </button>
+                    <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-end mr-2"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</p><p className={`text-sm font-black ${isOnline ? 'text-emerald-500' : 'text-slate-400'}`}>{isOnline ? 'ONLINE' : 'OFFLINE'}</p></div>
+                        <div onClick={toggleOnline} className={`w-14 h-8 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`}><div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ${isOnline ? 'translate-x-6' : 'translate-x-0'}`}></div></div>
                     </div>
                 </div>
-
-                {/* --- CHANGED TO 3 COLUMNS TO FIT RATING --- */}
-                <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-white/10 p-3 rounded-2xl border border-white/5 backdrop-blur-sm">
-                        <p className="text-stone-400 text-[10px] font-bold uppercase tracking-wider">Earnings</p>
-                        <h3 className="text-xl font-black text-emerald-400 mt-1">₹{stats.earnings.toFixed(0)}</h3>
-                    </div>
-                    <div className="bg-white/10 p-3 rounded-2xl border border-white/5 backdrop-blur-sm">
-                        <p className="text-stone-400 text-[10px] font-bold uppercase tracking-wider">Trips</p>
-                        <h3 className="text-xl font-black text-white mt-1">{stats.trips}</h3>
-                    </div>
-                    <div className="bg-white/10 p-3 rounded-2xl border border-white/5 backdrop-blur-sm">
-                        <p className="text-stone-400 text-[10px] font-bold uppercase tracking-wider">Rating</p>
-                        <h3 className="text-xl font-black text-amber-400 mt-1 flex items-center gap-1">
-                            {stats.rating > 0 ? stats.rating.toFixed(1) : '-'}
-                            <Star size={14} className="fill-amber-400 mb-0.5" />
-                        </h3>
-                    </div>
+                <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50/50 border-t border-slate-100">
+                    <div className="bg-white p-3 rounded-2xl border border-slate-100 flex flex-col items-center shadow-sm"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Earnings</p><h3 className="text-lg font-black text-emerald-500 mt-1">₹{stats.earnings.toFixed(0)}</h3></div>
+                    <div className="bg-white p-3 rounded-2xl border border-slate-100 flex flex-col items-center shadow-sm"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Trips</p><h3 className="text-lg font-black text-slate-800 mt-1">{stats.trips}</h3></div>
+                    <div className="bg-white p-3 rounded-2xl border border-slate-100 flex flex-col items-center shadow-sm"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rating</p><h3 className="text-lg font-black text-amber-500 mt-1 flex items-center gap-1">{stats.rating > 0 ? stats.rating.toFixed(1) : 'New'} <Star size={12} className="fill-amber-500 text-amber-500" /></h3></div>
                 </div>
-            </header>
+            </div>
 
-            {/* MAIN CONTENT */}
-            <main className="p-6 max-w-lg mx-auto space-y-6">
-
-                {/* Online Toggle */}
-                {!activeOrder && (
-                    <button onClick={toggleOnline} className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider shadow-lg transform active:scale-95 transition-all ${isOnline ? 'bg-white text-rose-500 border border-rose-100' : 'bg-emerald-500 text-white shadow-emerald-200 hover:bg-emerald-600'}`}>
-                        {isOnline ? 'Stop Receiving' : 'Go Online'}
-                    </button>
+            <div className="relative z-20 mt-auto w-full max-w-md mx-auto">
+                {!isOnline && (
+                    <div className="bg-white rounded-t-3xl p-6 text-center shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+                        <Power size={28} className="mx-auto text-slate-400 mb-4" />
+                        <h3 className="text-xl font-black text-slate-800 mb-2">You are offline</h3>
+                        <button onClick={toggleOnline} className="w-full py-4 bg-[#E23744] hover:bg-[#c92f3b] text-white font-bold rounded-xl shadow-lg mt-4">Go Online</button>
+                    </div>
                 )}
-
-                {/* Empty State */}
+                
                 {isOnline && !activeOrder && availableOrders.length === 0 && (
-                    <div className="text-center py-10 opacity-50">
-                        <div className="animate-pulse mb-3 flex justify-center"><Navigation size={40} className="text-stone-300" /></div>
-                        <p className="text-sm font-bold text-stone-400">Scanning area...</p>
+                    <div className="bg-white rounded-t-3xl p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex items-center gap-4">
+                        <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center relative"><Map className="text-emerald-600" size={24} /></div>
+                        <div><h3 className="font-bold text-slate-800">Finding orders near you...</h3></div>
                     </div>
                 )}
 
-                {/* ACTIVE ORDER CARD */}
+                {isOnline && !activeOrder && availableOrders.length > 0 && (
+                    <div className="px-4 pb-6 space-y-4">
+                        {availableOrders.map(order => (
+                            <div key={order.id} className="bg-white rounded-3xl p-5 shadow-2xl border-2 border-[#E23744] relative overflow-hidden">
+                                <div className="flex justify-between items-start mb-4 mt-2">
+                                    <div className="bg-red-50 text-[#E23744] px-3 py-1 rounded-md text-xs font-black uppercase">New Request</div>
+                                    <div className="text-right"><p className="text-[10px] font-bold text-slate-400">Est. Earning</p><p className="text-2xl font-black text-slate-900">₹{(order.total * 0.10).toFixed(0)}</p></div>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-2xl mb-5 border border-slate-100">
+                                    <div className="flex items-start gap-3 mb-3"><div className="mt-0.5"><Store size={16} className="text-slate-400" /></div><div><p className="text-xs font-bold text-slate-400 uppercase">Pickup From</p><p className="font-bold text-slate-800 leading-tight">{order.restaurant_name}</p></div></div>
+                                    <div className="flex items-start gap-3"><div className="mt-0.5"><MapPin size={16} className="text-[#E23744]" /></div><div><p className="text-xs font-bold text-slate-400 uppercase">Deliver To</p><p className="font-bold text-slate-800 leading-tight line-clamp-2">{order.delivery_address}</p></div></div>
+                                </div>
+                                <button onClick={() => handleAccept(order)} disabled={isProcessing} className="w-full py-4 bg-[#E23744] text-white rounded-xl font-bold text-lg">Accept Order</button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 {activeOrder && (
-                    <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-orange-100 relative overflow-hidden animate-in slide-in-from-bottom duration-500">
-                        <div className={`absolute top-0 left-0 h-1.5 bg-orange-500 transition-all duration-1000 ${activeOrder.status === 'out_for_delivery' ? 'w-full' : 'w-1/2'}`} />
+                    <div className="bg-white rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.15)] flex flex-col max-h-[85vh] overflow-y-auto custom-scrollbar">
+                        <div className="px-6 py-6">
+                            <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-black text-slate-900">{activeOrder.status === 'out_for_delivery' ? 'Drop at Customer' : 'Pickup from Restaurant'}</h2><span className="font-bold text-slate-400">#{activeOrder.id}</span></div>
 
-                        <div className="flex justify-between items-center mb-6 mt-1">
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${activeOrder.status === 'ready' ? 'bg-emerald-100 text-emerald-700' :
-                                activeOrder.status === 'out_for_delivery' ? 'bg-orange-100 text-orange-700' : 'bg-blue-50 text-blue-600'
-                                }`}>
-                                {activeOrder.status === 'out_for_delivery' ? 'On The Way' : activeOrder.status === 'ready' ? 'Pickup Ready' : 'Accepted'}
-                            </span>
-                            <span className="font-black text-lg text-stone-300">#{activeOrder.id}</span>
-                        </div>
-
-                        <div className="space-y-6 mb-8">
-                            <div className="relative pl-5 border-l-2 border-orange-500">
-                                <div className="absolute -left-[9px] top-0 w-4 h-4 bg-orange-500 rounded-full border-2 border-white" />
-                                <h3 className="font-bold text-lg text-stone-800">{activeOrder.restaurant_name}</h3>
-                                <p className="text-xs text-stone-500">{activeOrder.restaurant_address}</p>
-                            </div>
-
-                            <div className="relative pl-5 border-l-2 border-stone-200">
-                                <div className="absolute -left-[9px] top-0 w-4 h-4 bg-stone-300 rounded-full border-2 border-white" />
-                                <p className="text-sm font-medium text-stone-600">{activeOrder.delivery_address}</p>
-                            </div>
-
-                            {/* --- MESSAGE INTEGRATED INSIDE THE ORDER DETAILS --- */}
-                            {stats.message && (
-                                <div className="mt-4 bg-blue-50/80 p-4 rounded-2xl border border-blue-100 flex gap-3 items-start relative ml-2">
-                                    <MessageSquare size={20} className="text-blue-500 shrink-0 mt-0.5" />
-                                    <div>
-                                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Note from Customer</p>
-                                        <p className="text-sm font-bold text-blue-900 leading-snug">"{stats.message}"</p>
-                                    </div>
+                            {activeOrder.status === 'out_for_delivery' && (
+                                <div className={`w-full mb-6 py-3 text-xs font-black uppercase tracking-wider rounded-xl border transition-all text-center ${arrived ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-500 text-white border-amber-600 animate-pulse shadow-lg shadow-amber-500/30'}`}>
+                                    {arrived ? '📍 Arrived at Destination' : '🛵 Driving to Customer (20s)...'}
                                 </div>
                             )}
-                        </div>
 
-                        {activeOrder.status !== 'out_for_delivery' ? (
-                            <button onClick={handlePickup} disabled={activeOrder.status !== 'ready' || isProcessing} className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all ${activeOrder.status === 'ready' ? 'bg-stone-900 text-white active:scale-95' : 'bg-stone-100 text-stone-400 cursor-not-allowed'}`}>
-                                <Package size={20} /> {activeOrder.status === 'ready' ? (isProcessing ? 'Verifying...' : 'Confirm Pickup') : 'Waiting for Food...'}
-                            </button>
-                        ) : (
-                            <button onClick={handleComplete} disabled={isProcessing} className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 active:scale-95 hover:bg-emerald-600">
-                                {isProcessing ? 'Completing...' : <><CheckCircle size={20} /> Complete Delivery</>}
-                            </button>
-                        )}
+                            <div className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-100">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Order Details to Pickup</h4>
+                                <div className="space-y-2">
+                                    {activeOrder.items && activeOrder.items.length > 0 ? (
+                                        activeOrder.items.map((item, idx) => (
+                                            <div key={idx} className="flex gap-3 text-sm items-center"><span className="font-black text-slate-800 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">{item.qty}x</span><span className="font-bold text-slate-700">{item.name}</span></div>
+                                        ))
+                                    ) : (<p className="text-xs text-slate-400 italic">Accepting items...</p>)}
+                                </div>
+                            </div>
+
+                            <div className="relative pl-6 mb-6 border-l-2 border-dashed border-slate-200 ml-3 space-y-5">
+                                <div className="relative"><div className={`absolute -left-[31px] top-1 w-3 h-3 rounded-full border-2 border-white shadow-sm bg-blue-500`}></div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup</p><h3 className="font-bold text-slate-900">{activeOrder.restaurant_name}</h3><p className="text-xs text-slate-500 line-clamp-2">{activeOrder.restaurant_address}</p></div>
+                                <div className="relative"><div className={`absolute -left-[31px] top-1 w-3 h-3 rounded-full border-2 border-white shadow-sm bg-[#E23744]`}></div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Delivery</p><h3 className="font-bold text-slate-900">Customer</h3><p className="text-xs text-slate-500 mt-1 line-clamp-2">{activeOrder.delivery_address}</p></div>
+                            </div>
+
+                            {activeOrder.status !== 'out_for_delivery' ? (
+                                <button onClick={handlePickup} disabled={activeOrder.status !== 'ready' || isProcessing} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all ${activeOrder.status === 'ready' ? 'bg-[#E23744] text-white active:scale-95 shadow-red-500/30' : 'bg-slate-100 text-slate-400'}`}>
+                                    {activeOrder.status === 'ready' ? 'Confirm Pickup' : 'Waiting for Food...'}
+                                </button>
+                            ) : (
+                                <button onClick={handleComplete} disabled={isProcessing} className="w-full py-4 bg-emerald-500 text-white rounded-xl font-bold text-lg shadow-lg active:scale-95 shadow-emerald-500/30">Complete Delivery</button>
+                            )}
+                        </div>
                     </div>
                 )}
+            </div>
 
-                {/* AVAILABLE ORDERS LIST */}
-                {!activeOrder && isOnline && availableOrders.map(order => (
-                    <div key={order.id} className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-stone-100 hover:shadow-md transition-all transform hover:-translate-y-1">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2.5 rounded-xl ${order.status === 'ready' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-                                    {order.status === 'ready' ? <Package size={20} /> : <ChefHat size={20} />}
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-sm text-stone-800">{order.restaurant_name}</h4>
-                                    <div className="flex items-center gap-1 text-xs text-stone-400 mt-0.5">
-                                        <MapPin size={10} />
-                                        <span>2.5km • </span>
-                                        <span className="uppercase font-bold">{order.status === 'ready' ? "Ready" : "Preparing"}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <span className="block font-black text-lg text-emerald-600">₹{(order.total * 0.10).toFixed(0)}</span>
-                            </div>
-                        </div>
-
-                        <div className="bg-stone-50 p-3 rounded-xl mb-4 border border-stone-100">
-                            <p className="text-xs font-bold text-stone-400 uppercase mb-1">Deliver To</p>
-                            <p className="text-xs text-stone-600 line-clamp-1">{order.delivery_address}</p>
-                        </div>
-
-                        <button onClick={() => handleAccept(order)} disabled={isProcessing} className="w-full py-3.5 bg-stone-900 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-black transition-colors">
-                            Accept Order <ChevronRight size={16} />
-                        </button>
-                    </div>
-                ))}
-            </main>
-
-            {/* --- EDIT MODAL --- */}
             {isEditing && (
-                <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-stone-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-stone-800">Edit Profile</h2>
-                            <button onClick={() => setIsEditing(false)} className="p-2 bg-stone-100 rounded-full text-stone-500 hover:bg-stone-200"><X size={20} /></button>
-                        </div>
-                        <form onSubmit={handleSaveProfile} className="space-y-4">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-stone-400 ml-1">Username</label>
-                                <div className="relative">
-                                    <AtSign className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-                                    <input type="text" required value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-stone-50 border-2 border-stone-100 rounded-2xl focus:outline-none focus:border-stone-900 font-medium text-stone-800" placeholder="username" />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-stone-400 ml-1">Full Name</label>
-                                <div className="relative">
-                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-                                    <input type="text" required value={editForm.full_name} onChange={e => setEditForm({ ...editForm, full_name: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-stone-50 border-2 border-stone-100 rounded-2xl focus:outline-none focus:border-stone-900 font-medium text-stone-800" placeholder="Full Name" />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-stone-400 ml-1">Email</label>
-                                <div className="relative">
-                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-                                    <input type="email" required value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-stone-50 border-2 border-stone-100 rounded-2xl focus:outline-none focus:border-stone-900 font-medium text-stone-800" placeholder="email" />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-stone-400 ml-1">Phone</label>
-                                <div className="relative">
-                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-                                    <input type="tel" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-stone-50 border-2 border-stone-100 rounded-2xl focus:outline-none focus:border-stone-900 font-medium text-stone-800" placeholder="Phone" />
-                                </div>
-                            </div>
-                            <button type="submit" disabled={isSaving} className="w-full py-4 bg-stone-900 text-white rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 mt-4 active:scale-95 transition-all hover:bg-black">
-                                {isSaving ? 'Saving...' : <><Save size={20} /> Save Changes</>}
-                            </button>
-                        </form>
-                    </div>
-                </div>
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl"><div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black text-slate-800">Edit Profile</h2><button onClick={() => setIsEditing(false)} className="p-2 bg-slate-100 rounded-full text-slate-500"><X size={20} /></button></div><form onSubmit={handleSaveProfile} className="space-y-4"><div className="relative"><AtSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" required value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800" /></div><div className="relative"><User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" required value={editForm.full_name} onChange={e => setEditForm({ ...editForm, full_name: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800" /></div><div className="relative"><Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="email" required value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800" /></div><div className="relative"><Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="tel" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800" /></div><button type="submit" disabled={isSaving} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-lg mt-4">{isSaving ? 'Saving...' : 'Save'}</button><button type="button" onClick={handleLogout} className="w-full py-4 text-[#E23744] bg-red-50 rounded-xl font-bold text-sm mt-2 flex justify-center gap-2"><LogOut size={16} /> Logout</button></form></div></div>
             )}
         </div>
     );
 };
-
 export default RiderDashboard;

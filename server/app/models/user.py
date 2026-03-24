@@ -13,8 +13,6 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(String, default="customer")
     
-    # --- NEW COLUMN FOR ADDRESS ---
-    # This stores the full readable text: "Area, Rajkot, Gujarat, 360005"
     address = Column(Text, nullable=True) 
 
     rider = relationship("Rider", back_populates="user", uselist=False)

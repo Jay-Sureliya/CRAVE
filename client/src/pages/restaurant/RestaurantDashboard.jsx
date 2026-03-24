@@ -481,7 +481,7 @@ const RestaurantDashboard = () => {
                                     <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20} className="text-gray-400" /></button>
                                 </div>
                                 
-                                <div className="p-8 max-h-[75vh] overflow-y-auto no-scrollbar space-y-6">
+                                <div className="p-8 max-h-[65vh] overflow-y-auto no-scrollbar space-y-6">
                                     <div className="flex justify-center">
                                         <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
                                             <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-gray-100 bg-gray-50 shadow-inner">
