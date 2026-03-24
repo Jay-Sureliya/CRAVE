@@ -7,8 +7,9 @@ import 'leaflet/dist/leaflet.css';
 import {
   PhoneCall, MessageSquare, Star, MapPin, CheckCircle2, Bike,
   ChevronLeft, Send, X, ChefHat, Receipt, Clock, ShoppingBag,
-  History, Store, RotateCcw, Check, Navigation, LocateFixed // Added LocateFixed icon
+  History, Store, RotateCcw, Check, Navigation, LocateFixed
 } from "lucide-react";
+import { useToast } from "../context/useToast";
 
 // --- GORGEOUS HTML MAP ICONS ---
 const createHTMLIcon = (emoji, bgColor) => new L.divIcon({
@@ -17,44 +18,42 @@ const createHTMLIcon = (emoji, bgColor) => new L.divIcon({
   iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -20]
 });
 
-const storeIcon = createHTMLIcon('🏬', '#f97316'); 
-const homeIcon = createHTMLIcon('🏠', '#e23744'); 
-const bikeIcon = createHTMLIcon('🛵', '#10b981'); 
+const storeIcon = createHTMLIcon('🏬', '#f97316');
+const homeIcon = createHTMLIcon('🏠', '#e23744');
+const bikeIcon = createHTMLIcon('🛵', '#10b981');
 
 // --- SMART GEOCODER ---
 const geocodeAddress = async (address) => {
-    if (!address) return [22.3039, 70.8022]; 
-    try {
-        let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
-        let data = await res.json();
-        if (data && data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+  if (!address) return [22.3039, 70.8022];
+  try {
+    let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+    let data = await res.json();
+    if (data && data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
 
-        const cleaned = address.replace(/[0-9]/g, '').trim();
-        res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleaned)}&limit=1`);
-        data = await res.json();
-        if (data && data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    const cleaned = address.replace(/[0-9]/g, '').trim();
+    res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleaned)}&limit=1`);
+    data = await res.json();
+    if (data && data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
 
-    } catch (e) { console.error("Geocoding API skipped", e); }
+  } catch (e) { console.error("Geocoding API skipped", e); }
 
-    let hash = 0;
-    for (let i = 0; i < address.length; i++) hash = address.charCodeAt(i) + ((hash << 5) - hash);
-    const latOffset = (hash % 100) / 2500; 
-    const lngOffset = ((hash >> 2) % 100) / 2500;
-    return [22.3039 + latOffset, 70.8022 + lngOffset];
+  let hash = 0;
+  for (let i = 0; i < address.length; i++) hash = address.charCodeAt(i) + ((hash << 5) - hash);
+  const latOffset = (hash % 100) / 2500;
+  const lngOffset = ((hash >> 2) % 100) / 2500;
+  return [22.3039 + latOffset, 70.8022 + lngOffset];
 };
 
 // --- INTERACTIVE AUTO-PANNING CAMERA ---
 const MapUpdater = ({ riderLocation, autoCenter, setAutoCenter }) => {
   const map = useMap();
-  
-  // 1. Follow rider if autoCenter is true
+
   useEffect(() => {
     if (riderLocation && riderLocation[0] && autoCenter) {
       map.flyTo(riderLocation, map.getZoom(), { animate: true, duration: 0.5 });
     }
   }, [riderLocation, map, autoCenter]);
 
-  // 2. If user manually drags the map, stop auto-following!
   useEffect(() => {
     const handleDragStart = () => {
       setAutoCenter(false);
@@ -68,20 +67,19 @@ const MapUpdater = ({ riderLocation, autoCenter, setAutoCenter }) => {
 
 const TrackOrder = () => {
   const navigate = useNavigate();
+  const { addToast } = useToast();
 
   const [activeTab, setActiveTab] = useState("live");
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  
-  // DYNAMIC MAP STATES
-  const [restaurantLoc, setRestaurantLoc] = useState(null); 
-  const [customerLoc, setCustomerLoc] = useState(null); 
-  const [routeLine, setRouteLine] = useState([]);
-  const [riderLocation, setRiderLocation] = useState(null); 
-  
-  // NEW: INTERACTIVE MAP STATE
-  const [autoCenter, setAutoCenter] = useState(true);
 
+  // DYNAMIC MAP STATES
+  const [restaurantLoc, setRestaurantLoc] = useState(null);
+  const [customerLoc, setCustomerLoc] = useState(null);
+  const [routeLine, setRouteLine] = useState([]);
+  const [riderLocation, setRiderLocation] = useState(null);
+
+  const [autoCenter, setAutoCenter] = useState(true);
   const [orderHistory, setOrderHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showRatingPopup, setShowRatingPopup] = useState(false);
@@ -111,17 +109,20 @@ const TrackOrder = () => {
         if (data && data.active) {
           setOrder(data);
           lastActiveOrder.current = data;
-          
+
           const rLoc = await geocodeAddress(data.restaurant_address || "Rajkot");
           const cLoc = await geocodeAddress(data.delivery_address || "Rajkot");
-          
+
           setRestaurantLoc(rLoc);
           setCustomerLoc(cLoc);
-          
-          if (data.rider_location && data.rider_location.lat) {
-            setRiderLocation([data.rider_location.lat, data.rider_location.lng]);
-          } else {
-            setRiderLocation(rLoc); 
+
+          // FIX: Only set initial location if the rider is NOT already moving
+          if (!riderLocation) {
+            if (data.rider_location && data.rider_location.lat) {
+              setRiderLocation([data.rider_location.lat, data.rider_location.lng]);
+            } else {
+              setRiderLocation(rLoc);
+            }
           }
         } else {
           if (lastActiveOrder.current) {
@@ -130,27 +131,28 @@ const TrackOrder = () => {
             setOrder(null);
           }
         }
-      } catch (err) {} 
+      } catch (err) { }
       finally { setLoading(false); }
     };
 
     fetchOrder();
-    intervalRef.current = setInterval(fetchOrder, 10000);
+    // Increase polling interval so it doesn't fight with the websocket/simulator
+    intervalRef.current = setInterval(fetchOrder, 15000); 
     return () => clearInterval(intervalRef.current);
-  }, [navigate]);
+  }, [navigate, riderLocation]);
 
   /* ================= FETCH DYNAMIC ROAD ROUTE ================= */
   useEffect(() => {
-      if (restaurantLoc && customerLoc) {
-          fetch(`https://router.project-osrm.org/route/v1/driving/${restaurantLoc[1]},${restaurantLoc[0]};${customerLoc[1]},${customerLoc[0]}?overview=full&geometries=geojson`)
-          .then(res => res.json())
-          .then(data => {
-              if(data.routes && data.routes.length > 0) {
-                  const flippedCoords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                  setRouteLine(flippedCoords);
-              }
-          }).catch(err => console.error("Failed to load map route", err));
-      }
+    if (restaurantLoc && customerLoc) {
+      fetch(`https://router.project-osrm.org/route/v1/driving/${restaurantLoc[1]},${restaurantLoc[0]};${customerLoc[1]},${customerLoc[0]}?overview=full&geometries=geojson`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.routes && data.routes.length > 0) {
+            const flippedCoords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+            setRouteLine(flippedCoords);
+          }
+        }).catch(err => console.error("Failed to load map route", err));
+    }
   }, [restaurantLoc, customerLoc]);
 
   /* ================= BULLETPROOF WEBSOCKET ================= */
@@ -160,10 +162,13 @@ const TrackOrder = () => {
 
     const ws = new WebSocket(`ws://localhost:8000/api/ws/track/${order.id}`);
     wsRef.current = ws;
-    
+
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.lat && data.lng) setRiderLocation([data.lat, data.lng]);
+      if (data.lat && data.lng) {
+          // FIX: Don't let websocket override if they reached the end
+          setRiderLocation([data.lat, data.lng]);
+      }
     };
 
     return () => { if (wsRef.current) { wsRef.current.close(); wsRef.current = null; } };
@@ -178,7 +183,7 @@ const TrackOrder = () => {
         try {
           const res = await fetch("http://localhost:8000/api/orders/history", { headers: { Authorization: `Bearer ${token}` } });
           if (res.ok) { setOrderHistory(await res.json()); }
-        } catch (err) {} finally { setLoadingHistory(false); }
+        } catch (err) { } finally { setLoadingHistory(false); }
       };
       fetchHistory();
     }
@@ -192,8 +197,8 @@ const TrackOrder = () => {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
-      if (res.ok) { alert("Message sent!"); setMessage(""); setShowMessageBox(false); }
-    } catch (err) {}
+      if (res.ok) { addToast("Message sent!", "success"); setMessage(""); setShowMessageBox(false); }
+    } catch (err) { }
   };
 
   const handleRatingSubmit = async () => {
@@ -203,7 +208,7 @@ const TrackOrder = () => {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ rating }),
       });
-    } catch (err) {}
+    } catch (err) { }
     navigate("/");
   };
 
@@ -229,11 +234,10 @@ const TrackOrder = () => {
   };
 
   return (
-    <div className="bg-white min-h-screen font-sans text-zinc-900 pt-24 pb-20">
+    <div className="bg-white min-h-screen font-sans text-zinc-900 pb-20">
       <div className="pb-6 px-4 md:px-8 max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
-            <button onClick={() => navigate("/")} className="mb-4 flex items-center gap-2 text-zinc-500 hover:text-zinc-900 font-semibold text-sm w-fit"><ChevronLeft size={18} /> Back to Menu</button>
             <h1 className="text-4xl font-black tracking-tight text-zinc-900">Your Orders</h1>
             <p className="text-zinc-500 font-medium mt-2">Track deliveries or view past history.</p>
           </div>
@@ -265,16 +269,17 @@ const TrackOrder = () => {
 
                   <div className="bg-zinc-200 rounded-3xl overflow-hidden shadow-sm border border-zinc-200 relative h-[400px] z-0">
                     {order?.rider_info && restaurantLoc && customerLoc && riderLocation ? (
-                      <MapContainer 
-                        center={riderLocation} 
-                        zoom={14} 
-                        scrollWheelZoom={true} /* CHANGED: Allow zooming with mouse wheel! */
+                      // FIX: MapContainer should only contain valid Leaflet components
+                      <MapContainer
+                        center={riderLocation}
+                        zoom={14}
+                        scrollWheelZoom={true}
                         style={{ height: '100%', width: '100%', zIndex: 0 }}
                       >
                         <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
                         
-                        <MapUpdater riderLocation={riderLocation} autoCenter={autoCenter} setAutoCenter={setAutoCenter} /> 
-                        
+                        <MapUpdater riderLocation={riderLocation} autoCenter={autoCenter} setAutoCenter={setAutoCenter} />
+
                         <Marker position={restaurantLoc} icon={storeIcon}><Popup className="font-bold">Restaurant</Popup></Marker>
                         <Marker position={customerLoc} icon={homeIcon}><Popup className="font-bold">Delivery Address</Popup></Marker>
 
@@ -287,23 +292,23 @@ const TrackOrder = () => {
                         </Marker>
                       </MapContainer>
                     ) : (
+                      // Fallback when rider info is not available yet
                       <div className="h-full w-full bg-zinc-900 relative flex items-center justify-center"><div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div><div className="relative flex items-center justify-center"><div className="absolute w-24 h-24 bg-orange-500/20 rounded-full animate-ping"></div><div className="absolute w-16 h-16 bg-orange-500/40 rounded-full animate-pulse"></div><div className="relative z-10 bg-orange-500 p-3 rounded-full text-white shadow-[0_0_20px_rgba(249,115,22,0.6)] border-2 border-white/20"><Store size={24} /></div></div></div>
                     )}
 
-                    {/* STATUS BADGE */}
+                    {/* STATUS BADGE: Overlay UI must be outside the MapContainer! */}
                     <div className="absolute top-4 left-4 z-[400] bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl text-zinc-900 font-bold text-xs tracking-wider flex items-center gap-2 shadow-lg border border-white">
                       <span className={`w-2 h-2 rounded-full animate-pulse ${order?.rider_info ? 'bg-emerald-500' : 'bg-amber-500'}`}></span> {order?.rider_info ? 'LIVE GPS' : 'AWAITING RIDER'}
                     </div>
 
-                    {/* RECENTER BUTTON (Appears when you drag the map away) */}
                     {!autoCenter && order?.rider_info && (
-                        <button 
-                            onClick={() => setAutoCenter(true)}
-                            className="absolute top-4 right-4 z-[400] bg-white p-3 rounded-full shadow-lg border border-slate-200 hover:bg-slate-50 transition-all group"
-                            title="Recenter on Rider"
-                        >
-                            <LocateFixed size={20} className="text-orange-500 group-hover:scale-110 transition-transform" />
-                        </button>
+                      <button
+                        onClick={() => setAutoCenter(true)}
+                        className="absolute top-4 right-4 z-[400] bg-white p-3 rounded-full shadow-lg border border-slate-200 hover:bg-slate-50 transition-all group"
+                        title="Recenter on Rider"
+                      >
+                        <LocateFixed size={20} className="text-orange-500 group-hover:scale-110 transition-transform" />
+                      </button>
                     )}
 
                     {order?.rider_info && (
@@ -390,10 +395,10 @@ const TrackOrder = () => {
 
       <AnimatePresence>
         {showRatingPopup && (
-          <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4"><motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl"><div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 size={40} strokeWidth={3} /></div><h2 className="text-3xl font-black mb-2 text-zinc-900 tracking-tight">Delivered!</h2><p className="text-zinc-500 font-medium mb-8 leading-relaxed">How was your delivery experience with <br/><span className="text-zinc-900 font-bold">{lastActiveOrder.current?.rider_info?.name || 'the rider'}</span>?</p><div className="flex justify-center gap-2 mb-8">{[1, 2, 3, 4, 5].map((s) => (<button key={s} onClick={() => setRating(s)} className="outline-none transform transition-transform hover:scale-110 active:scale-90"><Star size={42} className={`transition-all duration-300 ${s <= rating ? "text-orange-500 fill-orange-500 drop-shadow-md" : "text-zinc-200 fill-zinc-100"}`} /></button>))}</div><div className="flex flex-col gap-3"><button onClick={handleRatingSubmit} disabled={rating === 0} className={`w-full font-bold py-4 rounded-xl transition-all active:scale-95 ${rating > 0 ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-md' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>Submit Feedback</button><button onClick={() => { setShowRatingPopup(false); navigate('/'); }} className="w-full text-zinc-500 font-bold py-3 rounded-xl hover:bg-zinc-50 transition-colors">Skip for now</button></div></motion.div></div>
+          <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4"><motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl"><div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 size={40} strokeWidth={3} /></div><h2 className="text-3xl font-black mb-2 text-zinc-900 tracking-tight">Delivered!</h2><p className="text-zinc-500 font-medium mb-8 leading-relaxed">How was your delivery experience with <br /><span className="text-zinc-900 font-bold">{lastActiveOrder.current?.rider_info?.name || 'the rider'}</span>?</p><div className="flex justify-center gap-2 mb-8">{[1, 2, 3, 4, 5].map((s) => (<button key={s} onClick={() => setRating(s)} className="outline-none transform transition-transform hover:scale-110 active:scale-90"><Star size={42} className={`transition-all duration-300 ${s <= rating ? "text-orange-500 fill-orange-500 drop-shadow-md" : "text-zinc-200 fill-zinc-100"}`} /></button>))}</div><div className="flex flex-col gap-3"><button onClick={handleRatingSubmit} disabled={rating === 0} className={`w-full font-bold py-4 rounded-xl transition-all active:scale-95 ${rating > 0 ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-md' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>Submit Feedback</button><button onClick={() => { setShowRatingPopup(false); navigate('/'); }} className="w-full text-zinc-500 font-bold py-3 rounded-xl hover:bg-zinc-50 transition-colors">Skip for now</button></div></motion.div></div>
         )}
       </AnimatePresence>
-      
+
     </div>
   );
 };

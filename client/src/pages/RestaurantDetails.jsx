@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import {
   ArrowLeft, Star, Search, Plus, Minus,
-  CheckCircle, AlertCircle, Heart, MapPin, Info
+  CheckCircle, AlertCircle, Heart, MapPin, UtensilsCrossed, ChevronRight, X, Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -22,31 +22,31 @@ const Toast = ({ message, type = "success" }) => (
     initial={{ opacity: 0, y: 50, scale: 0.9 }}
     animate={{ opacity: 1, y: 0, scale: 1 }}
     exit={{ opacity: 0, scale: 0.9 }}
-    className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-3.5 rounded-full shadow-2xl backdrop-blur-xl border ${
+    className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-xl border ${
       type === "neutral" 
-        ? "bg-zinc-900/95 text-white border-zinc-800" 
-        : "bg-emerald-500 text-white border-emerald-400"
+        ? "bg-stone-900/95 text-white border-stone-800" 
+        : type === "error"
+        ? "bg-red-600 text-white border-red-500"
+        : "bg-emerald-600 text-white border-emerald-500"
     }`}
   >
-    {type === "success" ? <CheckCircle size={18} className="text-white" /> : <AlertCircle size={18} className="text-white" />}
+    {type === "success" ? <CheckCircle size={20} className="text-white" /> : <AlertCircle size={20} className="text-white" />}
     <span className="font-bold text-sm tracking-wide">{message}</span>
   </motion.div>
 );
 
+// --- VERTICAL SKELETON ---
 const MenuSkeleton = () => (
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-    {['skel-1', 'skel-2', 'skel-3', 'skel-4'].map((i) => (
-      <div key={i} className="bg-white rounded-[2rem] p-4 flex gap-4 animate-pulse border border-zinc-100 shadow-sm">
-        <div className="w-28 h-28 md:w-36 md:h-36 bg-zinc-200 rounded-[1.5rem] flex-shrink-0" />
-        <div className="flex-1 space-y-3 py-2 flex flex-col justify-between">
-          <div>
-            <div className="h-5 bg-zinc-200 rounded-md w-3/4 mb-2" />
-            <div className="h-3 bg-zinc-100 rounded-md w-full" />
-            <div className="h-3 bg-zinc-100 rounded-md w-2/3 mt-1" />
-          </div>
-          <div className="flex justify-between items-end">
-            <div className="h-5 bg-zinc-200 rounded-md w-16" />
-            <div className="h-10 bg-zinc-200 rounded-xl w-24" />
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    {['skel-1', 'skel-2', 'skel-3', 'skel-4', 'skel-5', 'skel-6'].map((i) => (
+      <div key={i} className="bg-white rounded-[2rem] p-3 flex flex-col gap-4 animate-pulse border border-stone-100 shadow-sm">
+        <div className="w-full h-48 bg-stone-100 rounded-[1.5rem]" />
+        <div className="px-2 pb-2 space-y-3">
+          <div className="h-5 bg-stone-100 rounded-md w-3/4" />
+          <div className="h-3 bg-stone-50 rounded-md w-full" />
+          <div className="flex justify-between items-end pt-4">
+            <div className="h-6 bg-stone-100 rounded-md w-20" />
+            <div className="h-10 bg-stone-100 rounded-xl w-24" />
           </div>
         </div>
       </div>
@@ -61,21 +61,23 @@ const RestaurantDetails = () => {
   const [restaurant, setRestaurant] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // --- UI STATES ---
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [toast, setToast] = useState(null);
 
-  // --- DATA STATES ---
   const [cartItems, setCartItems] = useState([]);
   const [favorites, setFavorites] = useState({});
+
+  // Rating State
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingVal, setRatingVal] = useState(0);
+  const [isRatingSubmitting, setIsRatingSubmitting] = useState(false);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // --- HELPER: Get Token ---
   const getToken = () => {
     let token = localStorage.getItem("authToken") || localStorage.getItem("token") || localStorage.getItem("access_token");
     if (!token) token = sessionStorage.getItem("authToken") || sessionStorage.getItem("token") || sessionStorage.getItem("access_token");
@@ -83,7 +85,6 @@ const RestaurantDetails = () => {
     return null;
   };
 
-  // --- HELPERS to fetch User Data ---
   const fetchUserData = async () => {
       const token = getToken();
       if (!token) return; 
@@ -151,7 +152,7 @@ const RestaurantDetails = () => {
         return prev.map(item => item.id === itemId ? { ...item, quantity: newQty } : item);
       } else {
         if (delta > 0) {
-          showToast(`${itemName} added to cart`, "success");
+          showToast(`${itemName} added`, "success");
           const menuItem = menuItems.find(i => i.id === itemId);
           return [...prev, { ...menuItem, quantity: 1, image: getImageUrl(menuItem) }];
         }
@@ -184,7 +185,7 @@ const RestaurantDetails = () => {
     const isFav = !favorites[itemId];
     setFavorites(prev => ({ ...prev, [itemId]: isFav }));
     
-    if (isFav) showToast("Added to Favorites", "success");
+    if (isFav) showToast("Saved to Favorites", "success");
     else showToast("Removed from Favorites", "neutral");
 
     try { 
@@ -192,9 +193,40 @@ const RestaurantDetails = () => {
         window.dispatchEvent(new Event('fav-updated')); 
     } catch (err) { 
         setFavorites(prev => ({ ...prev, [itemId]: !isFav }));
-        if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-            showToast("Session expired. Sign in again.", "neutral");
+    }
+  };
+
+  // --- SUBMIT RESTAURANT RATING ---
+  const handleRateRestaurant = async () => {
+    const token = getToken();
+    if (!token) {
+        showToast("Please sign in to rate", "error");
+        return;
+    }
+    if (ratingVal === 0) return;
+
+    setIsRatingSubmitting(true);
+    try {
+        const response = await api.post(`/api/restaurants/${id}/rate`, { rating: ratingVal }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        showToast("Thank you for your rating!", "success");
+        
+        // INSTANT UI UPDATE: Update the local restaurant state with the new backend data
+        if (response.data && response.data.new_average !== undefined) {
+            setRestaurant(prev => ({
+                ...prev,
+                average_rating: response.data.new_average,
+                rating_count: response.data.total_reviews
+            }));
         }
+
+        setShowRatingModal(false);
+    } catch (err) {
+        console.error(err);
+        showToast("Failed to submit rating", "error");
+    } finally {
+        setIsRatingSubmitting(false);
     }
   };
 
@@ -214,113 +246,207 @@ const RestaurantDetails = () => {
   }, [menuItems, searchTerm, activeCategory]);
 
   return (
-    <div className="min-h-screen bg-zinc-50 font-sans text-zinc-900 pb-20 relative selection:bg-orange-500/20">
+    <div className="min-h-screen bg-white font-sans text-stone-900 pb-24 selection:bg-rose-500/20">
       <AnimatePresence>{toast && <Toast message={toast.msg} type={toast.type} />}</AnimatePresence>
 
-      {/* ================= HERO SECTION ================= */}
-      <div className="relative h-[35vh] md:h-[45vh] w-full bg-zinc-900 overflow-hidden">
-        {/* Cover Image (Using restaurant image or a gorgeous food fallback) */}
-        <img 
-            src={restaurant?.profile_image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1920&q=80"} 
-            alt="Restaurant Cover" 
-            className="w-full h-full object-cover opacity-50"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/40 to-transparent" />
-        
-        {/* Top Bar inside Hero */}
-        <div className="absolute top-0 w-full p-4 md:p-6 z-10 flex justify-between items-center max-w-7xl mx-auto left-0 right-0">
-            <button onClick={() => navigate("/")} className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white hover:text-zinc-900 transition-all shadow-sm">
-                <ArrowLeft size={24} />
-            </button>
-        </div>
+      <div className="w-[95%] mx-auto pt-6 md:pt-10">
+          
+          <button onClick={() => navigate("/rest")} className="mb-6 flex items-center gap-2 text-stone-500 hover:text-stone-900 transition-colors font-bold text-sm w-fit">
+              <ArrowLeft size={18} /> Back to Restaurants
+          </button>
 
-        {/* Restaurant Info inside Hero */}
-        <div className="absolute bottom-0 w-full p-6 md:p-10 z-10 max-w-7xl mx-auto left-0 right-0">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h1 className="text-4xl md:text-6xl text-white font-black tracking-tight mb-2">
-                        {loading ? "Loading..." : restaurant?.name}
-                    </h1>
-                    {!loading && (
-                        <div className="flex items-center gap-4 text-zinc-300 text-sm font-medium">
-                            <span className="flex items-center gap-1.5 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10">
-                                <MapPin size={16} className="text-orange-400" /> {restaurant?.address || "Unknown Location"}
-                            </span>
-                        </div>
-                    )}
-                </div>
-                {!loading && (
-                    <div className="flex items-center gap-2 bg-orange-500 text-white px-5 py-3 rounded-2xl font-black text-lg shadow-lg shadow-orange-500/30">
-                        <span>4.5</span> <Star size={20} className="fill-white text-white mb-0.5" />
-                    </div>
-                )}
-            </div>
-        </div>
-      </div>
-
-      {/* ================= STICKY NAVIGATION & SEARCH ================= */}
-      <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-zinc-200 shadow-sm">
-          <div className="max-w-7xl mx-auto">
-              
-              {/* Search Bar (Mobile & Desktop) */}
-              <div className="px-4 pt-4 pb-2 md:py-4">
-                  <div className="bg-zinc-100 border border-zinc-200 rounded-2xl flex items-center p-3.5 focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-500/20 transition-all">
-                      <Search className="mr-3 text-zinc-400" size={20} />
-                      <input 
-                        type="text" 
-                        placeholder="Search for your favorite dishes..." 
-                        value={searchTerm} 
-                        onChange={e => setSearchTerm(e.target.value)} 
-                        className="w-full bg-transparent outline-none font-semibold text-zinc-800 placeholder-zinc-400" 
+          {loading ? (
+              <div className="h-64 bg-stone-100 animate-pulse rounded-[2.5rem] mb-10 border border-stone-200"></div>
+          ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-10 h-auto md:h-72">
+                  
+                  {/* Hero Image */}
+                  <div className="md:col-span-2 relative rounded-[2rem] md:rounded-[2.5rem] overflow-hidden shadow-sm border border-stone-100 group">
+                      <img 
+                          src={restaurant?.profile_image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1920&q=80"} 
+                          alt="Cover" 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
                       />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                      <div className="absolute bottom-6 left-6 md:bottom-8 md:left-8">
+                          <h1 className="text-4xl md:text-5xl text-white font-black tracking-tight mb-2">
+                              {restaurant?.name}
+                          </h1>
+                          <p className="text-stone-200 font-medium flex items-center gap-2">
+                              <UtensilsCrossed size={16} className="text-rose-400" /> Premium Culinary Experience
+                          </p>
+                      </div>
+                  </div>
+
+                  <div className="grid grid-rows-2 gap-4 md:gap-6">
+                      
+                      {/* INTERACTIVE RATING BLOCK (Now completely dynamic) */}
+                      <div 
+                        onClick={() => setShowRatingModal(true)}
+                        className="bg-white rounded-[2rem] md:rounded-[2.5rem] p-6 shadow-sm border border-stone-200 flex flex-col justify-center relative overflow-hidden cursor-pointer group hover:border-rose-200 transition-colors"
+                      >
+                          <div className="absolute -right-4 -top-4 w-24 h-24 bg-rose-50 rounded-full blur-2xl transition-all group-hover:bg-rose-100"></div>
+                          <div className="flex items-center justify-between mb-2 relative z-10">
+                              <span className="text-stone-500 font-bold text-xs uppercase tracking-widest group-hover:text-rose-500 transition-colors">Rating</span>
+                              <Star size={20} className="fill-rose-500 text-rose-500 group-hover:scale-110 transition-transform" />
+                          </div>
+                          
+                          <div className="flex items-baseline gap-2 relative z-10">
+                              <h2 className="text-4xl font-black text-stone-900 group-hover:text-rose-600 transition-colors">
+                                  {restaurant?.average_rating > 0 ? restaurant.average_rating.toFixed(1) : "New"}
+                              </h2>
+                              {restaurant?.average_rating > 0 && <span className="text-stone-400 font-medium pb-1">/ 5.0</span>}
+                          </div>
+                          
+                          <p className="text-xs text-stone-400 font-medium mt-1 flex items-center justify-between">
+                              {restaurant?.rating_count > 0 ? `Based on ${restaurant.rating_count} reviews` : "Be the first to rate!"}
+                              <span className="text-rose-500 font-bold opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all flex items-center">
+                                  Rate Us <ChevronRight size={14} />
+                              </span>
+                          </p>
+                      </div>
+
+                      {/* LOCATION BLOCK */}
+                      <div className="bg-stone-900 rounded-[2rem] md:rounded-[2.5rem] p-6 shadow-lg flex flex-col justify-center relative overflow-hidden">
+                          <div className="absolute -right-4 -bottom-4 w-32 h-32 bg-stone-800 rounded-full blur-2xl"></div>
+                          <div className="flex items-center gap-3 mb-3 relative z-10">
+                              <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md">
+                                  <MapPin size={18} className="text-white" />
+                              </div>
+                              <span className="text-stone-400 font-bold text-xs uppercase tracking-widest">Location</span>
+                          </div>
+                          <p className="text-white font-medium text-sm leading-relaxed relative z-10 pr-4 line-clamp-2">
+                              {restaurant?.address || "Serving your favorite neighborhood."}
+                          </p>
+                      </div>
+
                   </div>
               </div>
+          )}
 
-              {/* Scrollable Categories */}
-              <div className="px-4 pb-4 flex gap-2.5 overflow-x-auto no-scrollbar scroll-smooth">
-                  {categories.map(cat => (
-                      <button 
-                        key={cat} 
-                        onClick={() => setActiveCategory(cat)} 
-                        className={`whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-bold transition-all border ${
-                            activeCategory === cat 
-                            ? "bg-zinc-900 text-white border-zinc-900 shadow-md" 
-                            : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50"
-                        }`}
-                      >
-                          {cat}
-                      </button>
-                  ))}
+          <div className="mb-6 max-w-md">
+              <div className="bg-white border border-stone-200 rounded-2xl flex items-center p-3 shadow-sm focus-within:ring-2 ring-stone-900/5 transition-all">
+                  <Search className="text-stone-400 mr-3 ml-1" size={20} />
+                  <input 
+                      type="text" 
+                      placeholder="Search the menu..." 
+                      value={searchTerm} 
+                      onChange={e => setSearchTerm(e.target.value)} 
+                      className="w-full bg-transparent outline-none font-medium text-stone-800" 
+                  />
               </div>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
+              
+              <aside className="lg:w-64 shrink-0">
+                  <div className="lg:sticky lg:top-24">
+                      <h3 className="hidden lg:block text-2xl font-black text-stone-900 mb-6">Menu</h3>
+                      
+                      <div className="flex lg:flex-col gap-3 overflow-x-auto no-scrollbar pb-4 lg:pb-0">
+                          {categories.map(cat => (
+                              <button 
+                                key={cat} 
+                                onClick={() => setActiveCategory(cat)} 
+                                className={`flex items-center justify-between whitespace-nowrap px-6 py-3.5 lg:px-5 lg:py-4 rounded-2xl text-sm font-bold transition-all duration-300 ${
+                                    activeCategory === cat 
+                                    ? "bg-stone-900 text-white shadow-md lg:scale-105 origin-left" 
+                                    : "bg-white text-stone-500 border border-stone-200 hover:bg-stone-50 hover:text-stone-900"
+                                }`}
+                              >
+                                  <span>{cat}</span>
+                                  {activeCategory === cat && <ChevronRight size={16} className="hidden lg:block opacity-60" />}
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+              </aside>
+
+              <main className="flex-1">
+                <div className="mb-8 flex items-end justify-between border-b border-stone-100 pb-4">
+                    <h2 className="text-2xl md:text-3xl font-black text-stone-900">{activeCategory}</h2>
+                    <span className="text-stone-400 font-bold text-sm bg-stone-50 px-3 py-1 rounded-lg border border-stone-100">{filteredItems.length} items</span>
+                </div>
+
+                {loading ? <MenuSkeleton /> : (
+                  <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <AnimatePresence mode="popLayout">
+                      {filteredItems.map((item, index) => (
+                        <MenuCard
+                          key={`${item.id}-${index}`}
+                          item={item}
+                          qty={getItemQty(item.id)}
+                          isFav={favorites[item.id] || false}
+                          onUpdate={(d) => handleUpdateCart(item.id, d, item.name)}
+                          onFav={() => toggleFavorite(item.id)}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </motion.div>
+                )}
+              </main>
           </div>
       </div>
 
-      {/* ================= MAIN MENU CONTENT ================= */}
-      <main className="max-w-7xl mx-auto px-4 md:px-8 pt-8">
-        <div className="mb-8 flex items-center justify-between">
-            <h2 className="text-2xl md:text-3xl font-black text-zinc-900">{activeCategory} Menu</h2>
-            <span className="text-zinc-400 font-bold text-sm bg-zinc-100 px-3 py-1 rounded-lg">{filteredItems.length} items</span>
-        </div>
-
-        {loading ? <MenuSkeleton /> : (
-          <motion.div layout className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-            <AnimatePresence>
-              {filteredItems.map((item) => (
-                <MenuCard
-                  key={item.id}
-                  item={item}
-                  qty={getItemQty(item.id)}
-                  isFav={favorites[item.id] || false}
-                  onUpdate={(d) => handleUpdateCart(item.id, d, item.name)}
-                  onFav={() => toggleFavorite(item.id)}
+      {/* ================= RATING MODAL ================= */}
+      <AnimatePresence>
+        {showRatingModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <motion.div 
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    onClick={() => setShowRatingModal(false)}
+                    className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                 />
-              ))}
-            </AnimatePresence>
-          </motion.div>
+                <motion.div 
+                    initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                    className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative z-10 text-center"
+                >
+                    <button onClick={() => setShowRatingModal(false)} className="absolute top-6 right-6 text-stone-400 hover:text-stone-900 bg-stone-100 rounded-full p-1.5 transition-colors">
+                        <X size={18} strokeWidth={3} />
+                    </button>
+                    
+                    <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Star size={32} className="text-rose-500 fill-rose-500" />
+                    </div>
+
+                    <h2 className="text-2xl font-black text-stone-900 tracking-tight mb-2">Rate your experience</h2>
+                    <p className="text-stone-500 text-sm font-medium mb-8">How was your meal at {restaurant?.name || "this restaurant"}?</p>
+
+                    <div className="flex items-center justify-center gap-2 mb-8">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                            <button 
+                                key={star}
+                                onClick={() => setRatingVal(star)}
+                                className="group p-1 transition-transform hover:scale-110 active:scale-90 outline-none"
+                            >
+                                <Star 
+                                    size={40} 
+                                    className={`transition-colors duration-200 ${
+                                        ratingVal >= star 
+                                        ? "fill-rose-500 text-rose-500 drop-shadow-md" 
+                                        : "fill-stone-100 text-stone-200"
+                                    }`} 
+                                />
+                            </button>
+                        ))}
+                    </div>
+
+                    <button 
+                        onClick={handleRateRestaurant}
+                        disabled={ratingVal === 0 || isRatingSubmitting}
+                        className={`w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center ${
+                            ratingVal > 0 
+                            ? "bg-rose-500 text-white shadow-lg shadow-rose-500/25 hover:bg-rose-600 active:scale-95" 
+                            : "bg-stone-100 text-stone-400 cursor-not-allowed"
+                        }`}
+                    >
+                        {isRatingSubmitting ? <Loader2 className="animate-spin" size={24} /> : "Submit Rating"}
+                    </button>
+                </motion.div>
+            </div>
         )}
-      </main>
-      
-      {/* Custom styles to hide scrollbar but allow scrolling */}
+      </AnimatePresence>
+
       <style dangerouslySetInnerHTML={{__html: `
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -329,80 +455,75 @@ const RestaurantDetails = () => {
   );
 };
 
-// --- PREMIUM MENU CARD COMPONENT ---
+// --- VERTICAL EDITORIAL MENU CARD ---
 const MenuCard = ({ item, qty, onUpdate, isFav, onFav }) => {
   const navigate = useNavigate();
   const dPrice = item.discountPrice || item.discount_price;
   const hasDiscount = dPrice && dPrice < item.price;
   const [imgLoaded, setImgLoaded] = useState(false);
 
-  const handleCardClick = () => {
-    navigate(`/menu-item/${item.id}`, { state: { item } });
-  };
-
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.2 }}
-      onClick={handleCardClick}
-      className="group bg-white rounded-[2rem] p-4 flex gap-4 border border-zinc-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-orange-200 transition-all duration-300 cursor-pointer relative"
+      transition={{ duration: 0.3 }}
+      onClick={() => navigate(`/menu-item/${item.id}`, { state: { item } })}
+      className="group bg-white rounded-[2rem] p-3 flex flex-col shadow-sm border border-stone-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden"
     >
-      {/* Heart Button Overlay */}
       <button 
         onClick={(e) => { e.stopPropagation(); onFav(); }} 
-        className="absolute top-6 left-6 z-20 p-2 bg-white/90 backdrop-blur-md rounded-full shadow-sm hover:scale-110 transition-transform active:scale-95 border border-zinc-100"
+        className="absolute top-6 right-6 z-20 p-2.5 bg-white/90 backdrop-blur-md rounded-full shadow-sm hover:scale-110 active:scale-95 transition-all border border-stone-100"
       >
-        <Heart size={16} className={`transition-colors duration-300 ${isFav ? "fill-red-500 text-red-500" : "text-zinc-400 hover:text-red-500"}`} />
+        <Heart size={18} className={`transition-colors duration-300 ${isFav ? "fill-rose-500 text-rose-500" : "text-stone-400 hover:text-rose-500"}`} />
       </button>
 
-      {/* Image Container */}
-      <div className="relative w-28 h-28 md:w-36 md:h-36 flex-shrink-0 rounded-[1.5rem] overflow-hidden bg-zinc-100 shadow-inner">
+      <div className="relative w-full h-48 md:h-52 flex-shrink-0 rounded-[1.5rem] overflow-hidden bg-stone-100 mb-4 border border-stone-100/50">
          <img
-          src={item.image ? item.image : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=60"} 
+          src={item.image ? item.image : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80"} 
           alt={item.name} 
           loading="lazy"
           onLoad={() => setImgLoaded(true)}
-          className={`w-full h-full object-cover transition-all duration-700 ${imgLoaded ? "opacity-100 scale-100" : "opacity-0 scale-105"} group-hover:scale-105`}
+          className={`w-full h-full object-cover transition-transform duration-700 ${imgLoaded ? "opacity-100 scale-100" : "opacity-0 scale-105"} group-hover:scale-105`}
         />
-        {/* Veg/NonVeg Marker */}
-        <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm p-1 rounded-md shadow-sm">
-            <div className={`w-3 h-3 rounded-sm border-[1.5px] flex items-center justify-center ${item.is_veg || item.type === 'veg' ? 'border-green-600' : 'border-red-600'}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${item.is_veg || item.type === 'veg' ? 'bg-green-600' : 'bg-red-600'}`}></div>
+        
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent"></div>
+
+        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-2.5 py-1.5 rounded-lg shadow-sm border border-white">
+            <div className={`w-3 h-3 rounded-sm border-[1.5px] flex items-center justify-center ${item.is_veg || item.type === 'veg' ? 'border-emerald-600' : 'border-rose-600'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${item.is_veg || item.type === 'veg' ? 'bg-emerald-600' : 'bg-rose-600'}`}></div>
             </div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-stone-700">{item.category}</span>
         </div>
       </div>
 
-      {/* Details Container */}
-      <div className="flex flex-col flex-1 min-w-0 justify-between py-1">
-        <div>
-          <h3 className="text-lg md:text-xl font-black text-zinc-900 leading-tight group-hover:text-orange-600 transition-colors line-clamp-2">
-              {item.name}
-          </h3>
-          <p className="text-zinc-500 text-xs md:text-sm mt-1.5 line-clamp-2 leading-relaxed font-medium">
-              {item.description || "Freshly prepared with authentic ingredients and our signature touch."}
-          </p>
-        </div>
+      <div className="flex flex-col flex-1 px-2 pb-2">
+        <h3 className="text-xl font-black text-stone-900 leading-tight group-hover:text-rose-600 transition-colors line-clamp-1 mb-1">
+            {item.name}
+        </h3>
+        <p className="text-stone-500 text-sm line-clamp-2 leading-relaxed font-medium mb-4">
+            {item.description || "Expertly crafted with premium ingredients for an unforgettable taste."}
+        </p>
         
-        {/* Bottom Row: Price & Button */}
-        <div className="mt-3 flex items-end justify-between">
+        <div className="mt-auto flex items-center justify-between pt-3 border-t border-stone-100">
           <div className="flex flex-col">
-            {hasDiscount && (<span className="text-zinc-400 text-xs line-through font-bold decoration-zinc-300">₹{item.price}</span>)}
-            <span className={`text-xl font-black tracking-tight ${hasDiscount ? 'text-orange-600' : 'text-zinc-900'}`}>₹{hasDiscount ? dPrice : item.price}</span>
+            {hasDiscount && (<span className="text-stone-400 text-xs line-through font-bold decoration-stone-300">₹{item.price}</span>)}
+            <span className={`text-2xl font-black tracking-tighter ${hasDiscount ? 'text-rose-600' : 'text-stone-900'}`}>
+                ₹{hasDiscount ? dPrice : item.price}
+            </span>
           </div>
           
           <div onClick={(e) => e.stopPropagation()}> 
             {qty === 0 ? (
-              <button onClick={() => onUpdate(1)} className="bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white px-5 py-2 md:px-6 md:py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 border border-orange-100 hover:border-orange-500 shadow-sm">
+              <button onClick={() => onUpdate(1)} className="bg-white border border-stone-200 text-stone-900 hover:bg-stone-900 hover:text-white px-6 py-2.5 rounded-2xl text-sm font-black transition-all active:scale-95 shadow-sm">
                   ADD
               </button>
             ) : (
-              <div className="flex items-center gap-2 bg-zinc-900 text-white p-1.5 rounded-xl shadow-lg">
-                <button onClick={() => onUpdate(-1)} className="p-1 hover:bg-zinc-700 rounded-lg transition-colors active:scale-90"><Minus size={16} /></button>
-                <span className="font-bold text-sm w-5 text-center">{qty}</span>
-                <button onClick={() => onUpdate(1)} className="p-1 hover:bg-zinc-700 rounded-lg transition-colors active:scale-90"><Plus size={16} /></button>
+              <div className="flex items-center gap-3 bg-stone-900 text-white p-1.5 px-2 rounded-2xl shadow-lg border border-stone-800">
+                <button onClick={() => onUpdate(-1)} className="p-1.5 hover:bg-stone-700 rounded-xl transition-colors active:scale-90"><Minus size={14} strokeWidth={3} /></button>
+                <span className="font-bold text-sm w-4 text-center">{qty}</span>
+                <button onClick={() => onUpdate(1)} className="p-1.5 hover:bg-stone-700 rounded-xl transition-colors active:scale-90"><Plus size={14} strokeWidth={3} /></button>
               </div>
             )}
           </div>

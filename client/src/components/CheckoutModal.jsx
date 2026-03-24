@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CreditCard, Banknote, X, CheckCircle, Loader2 } from 'lucide-react';
 import api from '../services/api';
+import { useToast } from '../context/useToast';
 
 const CheckoutModal = ({ isOpen, onClose, total, address, onSuccess, userEmail, userName, userPhone }) => {
+    const { addToast } = useToast();
     const [method, setMethod] = useState('COD');
     const [loading, setLoading] = useState(false);
 
@@ -20,7 +22,7 @@ const CheckoutModal = ({ isOpen, onClose, total, address, onSuccess, userEmail, 
 
     const handleOrder = async () => {
         if (!address) {
-            alert("Please select a delivery address first!");
+            addToast("Please select a delivery address first!", "error");
             return;
         }
 
@@ -41,7 +43,7 @@ const CheckoutModal = ({ isOpen, onClose, total, address, onSuccess, userEmail, 
             if (method === 'RAZORPAY') {
                 const res = await loadRazorpay();
                 if (!res) {
-                    alert('Razorpay SDK failed to load.');
+                    addToast('Razorpay SDK failed to load.', "error");
                     setLoading(false);
                     return;
                 }
@@ -66,7 +68,7 @@ const CheckoutModal = ({ isOpen, onClose, total, address, onSuccess, userEmail, 
                             onSuccess();
                             onClose();
                         } catch (err) {
-                            alert("Payment verification failed");
+                            addToast("Payment verification failed", "error");
                         }
                     },
                     prefill: {
@@ -95,7 +97,7 @@ const CheckoutModal = ({ isOpen, onClose, total, address, onSuccess, userEmail, 
 
         } catch (err) {
             console.error(err);
-            alert("Failed to initiate order.");
+            addToast("Failed to initiate order.", "error");
             setLoading(false);
         }
     };

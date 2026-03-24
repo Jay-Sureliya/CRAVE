@@ -2,66 +2,60 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-    User, LogOut, LayoutDashboard, UtensilsCrossed, ShoppingBag, 
-    ShieldCheck, X, Save, Edit2, Camera, Home, Bell, Search, 
+    User, LogOut, LayoutDashboard, UtensilsCrossed, ShoppingBag,
+    ShieldCheck, X, Save, Edit2, Camera, Home, Bell, Search,
     DollarSign, Star, Activity, ChevronRight, CheckCircle
 } from "lucide-react";
-
-// --- NEW IMPORT FOR ANALYTICS (Added Legend) ---
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 import api from "../../services/api";
 import RestaurantOrders from "../restaurant/RestaurantOrders";
 import RestaurantMenu from "../restaurant/RestaurantMenu";
+import { useToast } from "../../context/useToast";
 
 const RestaurantDashboard = () => {
     const navigate = useNavigate();
+    const { addToast } = useToast();
     const fileInputRef = useRef(null);
 
-    // --- STATE ---
     const [activeTab, setActiveTab] = useState(() => localStorage.getItem("restaurantActiveTab") || "overview");
-    const [globalSearch, setGlobalSearch] = useState(""); 
+    const [globalSearch, setGlobalSearch] = useState("");
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState("");
-    
-    // Notification States
+
     const [showNotifications, setShowNotifications] = useState(false);
     const [pendingOrders, setPendingOrders] = useState([]);
-    const knownOrdersRef = useRef(new Set()); 
-    
-    // Data States
+    const knownOrdersRef = useRef(new Set());
+
     const [userData, setUserData] = useState({
-        id: null, username: "", name: "", email: "", address: "", 
-        role: "restaurant", is_active: true, profile_image: null
+        id: null, username: "", name: "", email: "", address: "",
+        role: "restaurant", is_active: true, profile_image: null,
+        average_rating: 0, rating_count: 0
     });
-    
+
     const [stats, setStats] = useState({
         revenue: 0,
         orders: 0,
-        rating: 0
+        rating: "0.0"
     });
 
-    // --- CHART DATA STATE ---
     const [chartData, setChartData] = useState([]);
 
     const [formData, setFormData] = useState({
-        username: "", name: "", email: "", address: "", 
+        username: "", name: "", email: "", address: "",
         password: "", confirmPassword: ""
     });
 
     const [selectedFile, setSelectedFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
 
-    // --- EFFECTS ---
     useEffect(() => {
         localStorage.setItem("restaurantActiveTab", activeTab);
-        setGlobalSearch(""); 
+        setGlobalSearch("");
     }, [activeTab]);
 
-    // --- FETCH DATA (Auto Refresh Stats) ---
     const fetchDashboardData = async () => {
         try {
-            // 1. Profile 
             const profileRes = await api.get("/api/restaurant/me");
             const data = profileRes.data;
             if (data.id) sessionStorage.setItem("restaurant_id", data.id);
@@ -70,19 +64,19 @@ const RestaurantDashboard = () => {
                 ...prev,
                 ...data,
                 name: data.name || "Restaurant",
-                profile_image: data.profile_image 
+                profile_image: data.profile_image
                     ? (data.profile_image.startsWith("data:") ? data.profile_image : `${data.profile_image}?t=${Date.now()}`)
-                    : null
+                    : null,
+                average_rating: data.average_rating || 0,
+                rating_count: data.rating_count || 0
             }));
 
-            // 2. Orders for Analytics & Notifications
             const ordersRes = await api.get("/api/restaurant/orders");
             const orders = ordersRes.data || [];
-            
-            // --- NOTIFICATION LOGIC ---
+
             const currentPending = orders.filter(o => o.status === 'pending');
             const newArrivals = currentPending.filter(o => !knownOrdersRef.current.has(o.id));
-            
+
             if (newArrivals.length > 0 && knownOrdersRef.current.size > 0) {
                 setToastMessage(`🔔 You have ${newArrivals.length} new order(s)!`);
                 setTimeout(() => setToastMessage(""), 4000);
@@ -91,13 +85,11 @@ const RestaurantDashboard = () => {
             currentPending.forEach(o => knownOrdersRef.current.add(o.id));
             setPendingOrders(currentPending);
 
-            // --- GENERATE 30-DAY CHART DATA & STATS ---
-            // Create an array of the last 30 dates formatted as "Oct 12"
             const last30Days = [...Array(30)].map((_, i) => {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
                 return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            }).reverse(); 
+            }).reverse();
 
             const aggregatedData = last30Days.map(day => ({ name: day, revenue: 0, orders: 0 }));
 
@@ -105,18 +97,16 @@ const RestaurantDashboard = () => {
             let thirtyDayOrders = 0;
 
             orders.forEach(o => {
-                if(o.status === 'cancelled') return;
-                
-                // Get formatted date for this order
+                if (o.status === 'cancelled') return;
+
                 const orderDateObj = o.created_at ? new Date(o.created_at) : new Date();
                 const orderDay = orderDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                
+
                 const dayIndex = aggregatedData.findIndex(d => d.name === orderDay);
-                if(dayIndex !== -1) {
+                if (dayIndex !== -1) {
                     aggregatedData[dayIndex].revenue += parseFloat(o.total_amount || 0);
                     aggregatedData[dayIndex].orders += 1;
-                    
-                    // Add to card totals
+
                     thirtyDayRevenue += parseFloat(o.total_amount || 0);
                     thirtyDayOrders += 1;
                 }
@@ -124,15 +114,14 @@ const RestaurantDashboard = () => {
 
             setChartData(aggregatedData);
 
-            const currentRating = data.rating ? Number(data.rating).toFixed(1) : 4.5; 
+            // FIX: Safely parse rating so it always shows a number
+            const currentRating = data.average_rating !== undefined ? Number(data.average_rating).toFixed(1) : "0.0";
 
-            // Update stats to show exactly 30 days
             setStats({
                 revenue: thirtyDayRevenue,
                 orders: thirtyDayOrders,
                 rating: currentRating
             });
-            // ----------------------------------------------
 
         } catch (error) {
             if (error.response?.status === 401) navigate("/login");
@@ -141,11 +130,10 @@ const RestaurantDashboard = () => {
 
     useEffect(() => {
         fetchDashboardData();
-        const interval = setInterval(fetchDashboardData, 3000); 
+        const interval = setInterval(fetchDashboardData, 3000);
         return () => clearInterval(interval);
     }, [navigate]);
 
-    // --- HANDLERS ---
     const handleLogout = () => {
         sessionStorage.clear();
         localStorage.clear();
@@ -180,7 +168,7 @@ const RestaurantDashboard = () => {
     const handleSaveProfile = async (e) => {
         e.preventDefault();
         if (formData.password && formData.password !== formData.confirmPassword) {
-            return alert("Passwords do not match!");
+            return addToast("Passwords do not match!", "error");
         }
 
         const data = new FormData();
@@ -195,7 +183,7 @@ const RestaurantDashboard = () => {
             const response = await api.put("/api/restaurant/update", data, {
                 headers: { "Content-Type": "multipart/form-data" }
             });
-            
+
             setUserData(prev => ({
                 ...prev,
                 ...formData,
@@ -206,7 +194,7 @@ const RestaurantDashboard = () => {
             setToastMessage("Profile updated successfully!");
             setTimeout(() => setToastMessage(""), 3500);
         } catch (error) {
-            alert("Failed to update profile.");
+            addToast("Failed to update profile.", "error");
         }
     };
 
@@ -220,8 +208,6 @@ const RestaurantDashboard = () => {
             `}</style>
 
             <div className="flex h-screen w-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-hidden">
-                
-                {/* --- TOAST --- */}
                 <AnimatePresence>
                     {toastMessage && (
                         <motion.div
@@ -236,7 +222,6 @@ const RestaurantDashboard = () => {
                     )}
                 </AnimatePresence>
 
-                {/* --- SIDEBAR --- */}
                 <aside className="w-72 bg-white border-r border-gray-200 flex flex-col h-full z-30 shadow-sm transition-all">
                     <div className="h-24 flex-none flex items-center px-8 border-b border-gray-50">
                         <div className="flex items-center gap-3">
@@ -253,7 +238,7 @@ const RestaurantDashboard = () => {
                         <NavItem icon={LayoutDashboard} label="Overview" isActive={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
                         <NavItem icon={ShoppingBag} label="Live Orders" count={pendingOrders.length > 0 ? pendingOrders.length : null} isActive={activeTab === "orders"} onClick={() => setActiveTab("orders")} />
                         <NavItem icon={UtensilsCrossed} label="Menu Catalog" isActive={activeTab === "menu"} onClick={() => setActiveTab("menu")} />
-                        
+
                         <div className="px-4 mt-8 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Account</div>
                         <NavItem icon={User} label="Profile & Settings" isActive={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
                     </nav>
@@ -268,10 +253,7 @@ const RestaurantDashboard = () => {
                     </div>
                 </aside>
 
-                {/* --- MAIN CONTENT --- */}
                 <main className="flex-1 h-full overflow-y-auto no-scrollbar bg-[#F8F9FA] p-8 md:p-12 relative flex flex-col">
-                    
-                    {/* Header Bar */}
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
                         <div>
                             <h2 className="text-3xl font-bold text-gray-900">
@@ -286,23 +268,21 @@ const RestaurantDashboard = () => {
                         </div>
 
                         <div className="flex items-center gap-4 w-full md:w-auto relative">
-                            {/* --- GLOBAL SEARCH BAR --- */}
                             {(activeTab === 'orders' || activeTab === 'menu') && (
                                 <div className="relative group flex-1 md:w-80">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors" size={18} />
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         value={globalSearch}
                                         onChange={(e) => setGlobalSearch(e.target.value)}
                                         placeholder={activeTab === 'menu' ? "Search dishes..." : "Search Order ID..."}
-                                        className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-full text-sm focus:ring-2 focus:ring-black/5 focus:border-black outline-none shadow-sm transition-all" 
+                                        className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-full text-sm focus:ring-2 focus:ring-black/5 focus:border-black outline-none shadow-sm transition-all"
                                     />
                                 </div>
                             )}
 
-                            {/* --- BELL ICON & DROPDOWN --- */}
                             <div className="relative">
-                                <div 
+                                <div
                                     onClick={() => setShowNotifications(!showNotifications)}
                                     className={`p-3 bg-white rounded-full border ${pendingOrders.length > 0 ? 'border-orange-200 text-orange-500 shadow-md' : 'border-gray-200 text-gray-400 hover:text-black'} cursor-pointer transition-all shadow-sm relative`}
                                 >
@@ -312,10 +292,9 @@ const RestaurantDashboard = () => {
                                     )}
                                 </div>
 
-                                {/* Notifications Dropdown */}
                                 <AnimatePresence>
                                     {showNotifications && (
-                                        <motion.div 
+                                        <motion.div
                                             initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                             animate={{ opacity: 1, y: 0, scale: 1 }}
                                             exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -336,9 +315,9 @@ const RestaurantDashboard = () => {
                                                     </div>
                                                 ) : (
                                                     pendingOrders.map(order => (
-                                                        <div 
-                                                            key={order.id} 
-                                                            onClick={() => { setActiveTab('orders'); setShowNotifications(false); }} 
+                                                        <div
+                                                            key={order.id}
+                                                            onClick={() => { setActiveTab('orders'); setShowNotifications(false); }}
                                                             className="p-5 hover:bg-orange-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors group"
                                                         >
                                                             <div className="flex justify-between items-start mb-1.5">
@@ -359,22 +338,20 @@ const RestaurantDashboard = () => {
                                     )}
                                 </AnimatePresence>
                             </div>
-                            
                         </div>
                     </div>
 
                     <AnimatePresence mode="wait">
                         {activeTab === "overview" && (
                             <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                                
-                                {/* --- UPDATED: 30-DAY STAT CARDS --- */}
+
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <StatCard label="30-Day Revenue" value={`₹${stats.revenue.toLocaleString()}`} icon={DollarSign} color="bg-slate-900" />
                                     <StatCard label="30-Day Orders" value={stats.orders} icon={ShoppingBag} color="bg-orange-600" />
-                                    <StatCard label="Customer Rating" value={stats.rating} icon={Star} color="bg-blue-600" />
+                                    {/* FIX: Shows 0.0 ★ if rating is missing */}
+                                    <StatCard label="Customer Rating" value={`${stats.rating} ★`} icon={Star} color="bg-amber-500" />
                                 </div>
 
-                                {/* --- UPDATED: 30-DAY DUAL AXIS CHART --- */}
                                 <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col h-[420px]">
                                     <div className="flex justify-between items-center mb-2">
                                         <h3 className="text-lg font-bold text-gray-900">Performance Trend (Last 30 Days)</h3>
@@ -382,32 +359,25 @@ const RestaurantDashboard = () => {
                                             <Activity size={20} />
                                         </div>
                                     </div>
-                                    
+
                                     <div className="flex-1 w-full h-full mt-4">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                                 <defs>
                                                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#ea580c" stopOpacity={0.3}/>
-                                                        <stop offset="95%" stopColor="#ea580c" stopOpacity={0}/>
+                                                        <stop offset="5%" stopColor="#ea580c" stopOpacity={0.3} />
+                                                        <stop offset="95%" stopColor="#ea580c" stopOpacity={0} />
                                                     </linearGradient>
                                                     <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                                                     </linearGradient>
                                                 </defs>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                
-                                                {/* minTickGap forces it to skip dates so the X-Axis doesn't get squished */}
                                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} dy={10} minTickGap={25} />
-                                                
-                                                {/* Left Axis for Revenue */}
                                                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(value) => `₹${value}`} />
-                                                
-                                                {/* Right Axis for Orders */}
                                                 <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                                                
-                                                <Tooltip 
+                                                <Tooltip
                                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                                     formatter={(value, name) => {
                                                         if (name === "Revenue") return [`₹${Number(value).toFixed(0)}`, "Revenue"];
@@ -415,14 +385,12 @@ const RestaurantDashboard = () => {
                                                     }}
                                                 />
                                                 <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
-                                                
                                                 <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#ea580c" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                                                 <Area yAxisId="right" type="monotone" dataKey="orders" name="Orders" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorOrders)" />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     </div>
                                 </div>
-
                             </motion.div>
                         )}
 
@@ -448,21 +416,25 @@ const RestaurantDashboard = () => {
                                             <span className="text-4xl font-bold text-gray-300">{(userData.name || "R").charAt(0)}</span>
                                         )}
                                     </div>
-                                    <div className="flex-1 relative z-10">
+                                    <div className="flex-1 relative z-10 w-full">
                                         <div className="flex justify-between items-start">
                                             <div>
                                                 <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{userData.name}</h3>
                                                 <p className="text-gray-500 font-medium">@{userData.username}</p>
                                             </div>
-                                            <button onClick={openEditModal} className="px-5 py-2.5 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg">
+                                            <button onClick={openEditModal} className="px-5 py-2.5 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg shrink-0">
                                                 <Edit2 size={16} /> Edit Profile
                                             </button>
                                         </div>
-                                        
+
                                         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <DetailBox label="Email Address" value={userData.email} />
                                             <DetailBox label="Account Status" value={userData.is_active ? "Active" : "Inactive"} isStatus />
-                                            <DetailBox label="Business Address" value={userData.address || "Not Provided"} className="md:col-span-2" />
+                                            <DetailBox 
+                                                label="Overall Rating" 
+                                                value={`${userData.average_rating > 0 ? Number(userData.average_rating).toFixed(1) : '0.0'} / 5.0 (${userData.rating_count || 0} Reviews)`} 
+                                            />
+                                            <DetailBox label="Business Address" value={userData.address || "Not Provided"} />
                                         </div>
                                     </div>
                                 </div>
@@ -471,7 +443,6 @@ const RestaurantDashboard = () => {
                     </AnimatePresence>
                 </main>
 
-                {/* --- EDIT MODAL --- */}
                 <AnimatePresence>
                     {isEditModalOpen && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -480,7 +451,7 @@ const RestaurantDashboard = () => {
                                     <h3 className="font-bold text-xl text-gray-900">Edit Profile</h3>
                                     <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20} className="text-gray-400" /></button>
                                 </div>
-                                
+
                                 <div className="p-8 max-h-[65vh] overflow-y-auto no-scrollbar space-y-6">
                                     <div className="flex justify-center">
                                         <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
@@ -519,8 +490,6 @@ const RestaurantDashboard = () => {
         </>
     );
 };
-
-// --- SUB COMPONENTS ---
 
 const NavItem = ({ icon: Icon, label, isActive, onClick, count }) => (
     <button onClick={onClick} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all duration-200 group relative ${isActive ? "bg-black text-white shadow-xl shadow-black/10" : "text-gray-500 hover:bg-gray-100 hover:text-black"}`}>

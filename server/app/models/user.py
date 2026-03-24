@@ -41,6 +41,9 @@ class Restaurant(Base):
 
     total_earnings = Column(Float, default=0.0)
 
+    rating_count = Column(Integer, default=0)
+    average_rating = Column(Float, default=0.0)
+    
 # 3. FAVORITES (NEW TABLE)
 class Favorite(Base):
     __tablename__ = "favorites"

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Plus, X, Image as ImageIcon, Leaf, Drumstick, Edit, Trash2, UploadCloud, Eye, EyeOff, Loader2, ListPlus } from "lucide-react";
+import { useToast } from "../../context/useToast";
 
 // --- HELPER: Lazy Load Images ---
 const getImageUrl = (item) => {
@@ -33,6 +34,7 @@ const DEFAULT_CATEGORIES = [
 ];
 
 const RestaurantMenu = ({ searchQuery }) => {
+    const { addToast } = useToast();
     const [showModal, setShowModal] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const dropdownRef = useRef(null);
@@ -141,7 +143,7 @@ const RestaurantMenu = ({ searchQuery }) => {
             const url = isEditing ? `http://localhost:8000/api/menu/${editId}` : "http://localhost:8000/api/menu";
             const method = isEditing ? "PUT" : "POST";
             const response = await fetch(url, { method, headers, body: formData });
-            if (response.ok) { setShowModal(false); fetchData(); } else { alert("Failed"); }
+            if (response.ok) { setShowModal(false); fetchData(); } else { addToast("Failed to save menu item", "error"); }
         } catch (error) { console.error(error); }
     };
 

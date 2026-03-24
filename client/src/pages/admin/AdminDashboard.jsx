@@ -29,16 +29,18 @@ const Toast = ({ message, type, onClose }) => {
 const DetailModal = ({ data, type, onClose }) => {
   if (!data) return null;
 
-  // Extract real data with fallbacks for UI safety
   const joinDate = data.created_at
     ? new Date(data.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : "Recently Joined";
 
-  const ratingValue = (data.rating !== undefined && data.rating !== null) ? Number(data.rating).toFixed(1) : "N/A";
+  // FIX: Dynamically grabbing rating for BOTH restaurants and riders
+  const rawRating = data.average_rating || data.rating || 0;
+  const ratingValue = rawRating > 0 ? Number(rawRating).toFixed(1) : "New";
+  const ratingCount = data.rating_count || 0;
+  
   const rawEarnings = Number(data.total_earnings || data.earnings || 0);
   const rawSpent = Number(data.total_spent || 0);
 
-  // Currency Formatter
   const formatMoney = (amount) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
   };
@@ -61,7 +63,6 @@ const DetailModal = ({ data, type, onClose }) => {
               </div>
             </div>
           </div>
-          {/* REMOVED: Top Right X Button */}
         </div>
 
         {/* Body */}
@@ -89,10 +90,7 @@ const DetailModal = ({ data, type, onClose }) => {
           <div className="space-y-6">
             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Activity</h3>
 
-            {/* Dynamic Grid - 1 column for customers, 2 columns for riders & restaurants */}
             <div className={`grid ${type === 'customer' ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
-
-              {/* EARNINGS / SPENT (Always visible) */}
               <div className="p-4 bg-gray-50 rounded-2xl">
                 <DollarSign className="text-green-600 mb-2" size={20} />
                 <p className="text-xs text-gray-500">{type === 'customer' ? 'Total Spent' : 'Total Earnings'}</p>
@@ -101,22 +99,23 @@ const DetailModal = ({ data, type, onClose }) => {
                 </p>
               </div>
 
-              {/* Show Rating for everyone EXCEPT customers */}
               {type !== 'customer' && (
                 <div className="p-4 bg-gray-50 rounded-2xl">
                   <Star className="text-orange-500 mb-2" size={20} />
                   <p className="text-xs text-gray-500">Rating</p>
-                  <p className="text-xl font-bold text-gray-900">{ratingValue} <span className="text-xs text-gray-400 font-normal">/ 5.0</span></p>
+                  <p className="text-xl font-bold text-gray-900">
+                      {ratingValue} <span className="text-xs text-gray-400 font-normal">/ 5.0</span>
+                  </p>
+                  {/* FIX: Now shows review count for both Restaurants AND Riders */}
+                  {ratingCount > 0 && <p className="text-[10px] text-gray-400 mt-1">{ratingCount} Reviews</p>}
                 </div>
               )}
-
             </div>
           </div>
         </div>
 
         <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
           <button onClick={onClose} className="px-6 py-2 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-100 transition">Close</button>
-          {/* REMOVED: View Full History Button */}
         </div>
       </div>
     </div>
@@ -151,32 +150,26 @@ const AdminDashboard = () => {
   const [toast, setToast] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Confirmation State
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmActionId, setConfirmActionId] = useState(null);
 
-  // Notification State
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Detail Modal State
   const [selectedItem, setSelectedItem] = useState(null);
   const [detailType, setDetailType] = useState(null);
 
-  // Data States
   const [restaurantRequests, setRestaurantRequests] = useState([]);
   const [riderRequests, setRiderRequests] = useState([]);
   const [activeRestaurants, setActiveRestaurants] = useState([]);
   const [users, setUsers] = useState([]);
 
-  // --- MESSAGE STATES ---
   const [messages, setMessages] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [isSendingReply, setIsSendingReply] = useState(false);
 
-  // --- FETCH DATA & NOTIFICATIONS ---
   const fetchData = async (isPolling = false) => {
     try {
       const [reqRes, riderReqRes, restaurantsRes, usersRes, messagesRes] = await Promise.allSettled([
@@ -222,7 +215,6 @@ const AdminDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Filter Data
   const customerList = users.filter(u => u.role === "customer");
   const riderList = users.filter(u => u.role === "driver" || u.role === "rider");
   const customerCount = customerList.length;
@@ -290,7 +282,6 @@ const AdminDashboard = () => {
     setConfirmActionId(null);
   };
 
-  // --- ACTIONS ---
   const handleApproveRestaurant = async (e, id) => {
     e.stopPropagation();
     try {
@@ -355,16 +346,10 @@ const AdminDashboard = () => {
     }
   };
 
-  // --- DYNAMIC REVENUE CALCULATION ---
   const calculatePlatformRevenue = () => {
-    // Total up earnings from restaurants and riders
     const totalRestaurantRev = activeRestaurants.reduce((sum, r) => sum + Number(r.total_earnings || r.earnings || 0), 0);
     const totalRiderRev = riderList.reduce((sum, r) => sum + Number(r.total_earnings || r.earnings || 0), 0);
-
-    // Apply the math: 20% from restaurants, 10% from riders
     const platformRevenue = (totalRestaurantRev * 0.20) + (totalRiderRev * 0.10);
-
-    // Format output
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(platformRevenue);
   };
 
@@ -542,13 +527,19 @@ const AdminDashboard = () => {
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                   <table className="w-full text-left">
                     <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
-                      <tr><th className="px-6 py-4">Restaurant</th><th className="px-6 py-4">Location</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                      <tr><th className="px-6 py-4">Restaurant</th><th className="px-6 py-4">Location</th><th className="px-6 py-4">Rating</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {activeRestaurants.filter(r => r.name?.toLowerCase().includes(searchTerm.toLowerCase())).map(r => (
                         <tr key={r.id} onClick={() => openDetailModal(r, 'restaurant')} className="hover:bg-gray-50/50 cursor-pointer transition-colors">
                           <td className="px-6 py-4 font-bold text-gray-900">{r.name}</td>
                           <td className="px-6 py-4 text-gray-500 text-sm">{r.address || r.location || "N/A"}</td>
+                          <td className="px-6 py-4">
+                              <span className="flex items-center gap-1 text-sm font-bold text-slate-700">
+                                  <Star size={14} className="fill-amber-400 text-amber-400" />
+                                  {r.average_rating > 0 ? Number(r.average_rating).toFixed(1) : "New"}
+                              </span>
+                          </td>
                           <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${r.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{r.is_active ? "Active" : "Inactive"}</span></td>
                           <td className="px-6 py-4 text-right">
                             <button onClick={(e) => handleDeleteRestaurant(e, r.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button>
@@ -624,7 +615,8 @@ const AdminDashboard = () => {
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                   <table className="w-full text-left">
                     <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
-                      <tr><th className="px-6 py-4">Rider</th><th className="px-6 py-4">Contact</th><th className="px-6 py-4">Role</th><th className="px-6 py-4 text-right">Action</th></tr>
+                      {/* FIX: ADDED RATING COLUMN TO RIDER TABLE */}
+                      <tr><th className="px-6 py-4">Rider</th><th className="px-6 py-4">Contact</th><th className="px-6 py-4">Rating</th><th className="px-6 py-4">Role</th><th className="px-6 py-4 text-right">Action</th></tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {riderList.filter(u => u.username?.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
@@ -639,6 +631,15 @@ const AdminDashboard = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-500">{u.email}</td>
+                          
+                          {/* FIX: DYNAMIC RATING FOR RIDER IN TABLE */}
+                          <td className="px-6 py-4">
+                              <span className="flex items-center gap-1 text-sm font-bold text-slate-700">
+                                  <Star size={14} className="fill-amber-400 text-amber-400" />
+                                  {u.rating > 0 ? Number(u.rating).toFixed(1) : "New"}
+                              </span>
+                          </td>
+
                           <td className="px-6 py-4"><span className="px-2 py-1 rounded-md text-xs font-bold bg-cyan-100 text-cyan-700">Rider</span></td>
                           <td className="px-6 py-4 text-right">
                             <button onClick={(e) => handleTerminateUser(e, u.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete Rider">

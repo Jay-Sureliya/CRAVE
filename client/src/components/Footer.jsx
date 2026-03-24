@@ -1,91 +1,101 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn } from 'react-icons/fa';
+import { Mail, Phone, MapPin, Globe } from 'lucide-react';
 
 const Footer = () => {
-  return (
-    <footer className="bg-gray-900 text-white py-12">
-      <div className="container mx-auto px-4">
-        
-        {/* Top Section: Grid Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          
-          {/* Column 1: About */}
-          <div>
-            <h3 className="text-xl font-semibold mb-4 relative inline-block after:content-[''] after:absolute after:left-0 after:-bottom-2 after:w-12 after:h-1 after:bg-pink-500">
-              CompanyName
-            </h3>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              We are dedicated to providing the best service possible. Building quality software and designs for over a decade.
-            </p>
-          </div>
+    return (
+        <footer className="bg-zinc-950 text-white border-t border-white/5">
+            <div className="container mx-auto px-6 py-16">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-12">
+                    
+                    {/* Brand Column */}
+                    <div className="md:col-span-5 space-y-6">
+                        <Link to="/" className="text-3xl font-black tracking-tighter flex items-center gap-1 group">
+                            CRAVE<span className="text-orange-500 group-hover:text-orange-400 transition-colors">.</span>
+                        </Link>
+                        <p className="text-zinc-400 leading-relaxed max-w-sm text-sm font-medium">
+                            Bringing the city's best flavors to your doorstep. Simple, fast, and always delicious.
+                        </p>
+                        <div className="flex items-center gap-4">
+                            <SocialIcon icon={<FaFacebookF size={14}/>} />
+                            <SocialIcon icon={<FaInstagram size={14}/>} />
+                            <SocialIcon icon={<FaTwitter size={14}/>} />
+                            <SocialIcon icon={<FaLinkedinIn size={14}/>} />
+                        </div>
+                    </div>
 
-          {/* Column 2: Quick Links */}
-          <div>
-            <h3 className="text-xl font-semibold mb-4 relative inline-block after:content-[''] after:absolute after:left-0 after:-bottom-2 after:w-12 after:h-1 after:bg-pink-500">
-              Quick Links
-            </h3>
-            <ul className="space-y-2">
-              {['Home', 'About Us', 'Services', 'Contact'].map((item) => (
-                <li key={item}>
-                  <a
-                    href="#"
-                    className="text-gray-400 hover:text-white hover:pl-2 transition-all duration-300 text-sm block"
-                  >
-                    {item}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
+                    {/* Navigation Column */}
+                    <div className="md:col-span-3 space-y-6">
+                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-orange-500">Company</h4>
+                        <ul className="space-y-4">
+                            <FooterLink to="/about" label="About Us" />
+                            <FooterLink to="/rest" label="Restaurants" />
+                            <FooterLink to="/Contact-us" label="Help & Support" />
+                        </ul>
+                    </div>
 
-          {/* Column 3: Contact Info */}
-          <div>
-            <h3 className="text-xl font-semibold mb-4 relative inline-block after:content-[''] after:absolute after:left-0 after:-bottom-2 after:w-12 after:h-1 after:bg-pink-500">
-              Contact Us
-            </h3>
-            <ul className="space-y-2 text-gray-400 text-sm">
-              <li>123 Main Street, New York, NY</li>
-              <li>+1 555 123 4567</li>
-              <li>support@company.com</li>
-            </ul>
-          </div>
+                    {/* Legal Column */}
+                    <div className="md:col-span-4 space-y-6">
+                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-orange-500">Legal</h4>
+                        <ul className="space-y-4">
+                            <FooterLink to="/terms" label="Terms of Service" />
+                            <FooterLink to="/privacy" label="Privacy Policy" />
+                            <FooterLink to="/refund" label="Refund Policy" />
+                        </ul>
+                    </div>
+                </div>
 
-          {/* Column 4: Social Media */}
-          <div>
-            <h3 className="text-xl font-semibold mb-4 relative inline-block after:content-[''] after:absolute after:left-0 after:-bottom-2 after:w-12 after:h-1 after:bg-pink-500">
-              Follow Us
-            </h3>
-            <div className="flex space-x-4">
-              <SocialLink href="#"><FaFacebookF /></SocialLink>
-              <SocialLink href="#"><FaTwitter /></SocialLink>
-              <SocialLink href="#"><FaInstagram /></SocialLink>
-              <SocialLink href="#"><FaLinkedinIn /></SocialLink>
+                {/* Simplified Contact Bar */}
+                <div className="mt-16 pt-8 border-t border-white/5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="flex items-center gap-3 text-zinc-400">
+                        <MapPin size={16} className="text-orange-500" />
+                        <span className="text-xs font-medium">Kalawad Road, Rajkot, Gujarat</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-zinc-400">
+                        <Phone size={16} className="text-orange-500" />
+                        <span className="text-xs font-medium">+91 98765 43210</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-zinc-400 lg:justify-end">
+                        <Mail size={16} className="text-orange-500" />
+                        <span className="text-xs font-medium">support@crave.com</span>
+                    </div>
+                </div>
             </div>
-          </div>
 
-        </div>
-
-        {/* Bottom Section: Copyright */}
-        <div className="border-t border-gray-800 mt-12 pt-8 text-center">
-          <p className="text-gray-500 text-sm">
-            &copy; {new Date().getFullYear()} CompanyName. All rights reserved.
-          </p>
-        </div>
-      </div>
-    </footer>
-  );
+            {/* Bottom Copyright Bar */}
+            <div className="bg-black py-6 border-t border-white/5">
+                <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                        &copy; {new Date().getFullYear()} CRAVE. ALL RIGHTS RESERVED.
+                    </p>
+                    <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                        <Globe size={12} />
+                        <span>English (IN)</span>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    );
 };
 
-// Helper component for Social Links to reduce repetition
-const SocialLink = ({ href, children }) => {
-  return (
-    <a
-      href={href}
-      className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 hover:bg-white hover:text-gray-900 transition-colors duration-300"
-    >
-      {children}
+// --- HELPER COMPONENTS ---
+
+const FooterLink = ({ to, label }) => (
+    <li>
+        <Link 
+            to={to} 
+            className="text-zinc-400 hover:text-white text-sm font-medium transition-colors duration-200"
+        >
+            {label}
+        </Link>
+    </li>
+);
+
+const SocialIcon = ({ icon }) => (
+    <a href="#" className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-zinc-400 hover:bg-orange-500 hover:text-white transition-all duration-300 shadow-lg">
+        {icon}
     </a>
-  );
-};
+);
 
 export default Footer;

@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Store, Loader2, CheckCircle2, Bike, ArrowRight } from 'lucide-react';
 import api from '../services/api';
+import { useToast } from '../context/useToast';
 
 const Partner = () => {
+  const { addToast } = useToast();
   // --- STATE MANAGEMENT ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('restaurant'); // 'restaurant' or 'rider'
@@ -63,9 +65,9 @@ const Partner = () => {
     } catch (error) {
       console.error("Error submitting form", error);
       if (error.response && error.response.data && error.response.data.detail) {
-        alert(`Error: ${error.response.data.detail}`);
+        addToast(`Error: ${error.response.data.detail}`, "error");
       } else {
-        alert("Something went wrong. Please check your connection.");
+        addToast("Something went wrong. Please check your connection.", "error");
       }
     } finally {
       setLoading(false);

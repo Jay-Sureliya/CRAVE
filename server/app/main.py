@@ -844,8 +844,9 @@ def get_all_restaurants(db: Session = Depends(get_db)):
             "is_active": r.is_active, 
             "profile_image": r.profile_image, 
             "cuisine": cuisine_str,
-            # --- NEW: Send earnings to the frontend safely ---
-            "total_earnings": getattr(r, "total_earnings", 0.0) 
+            "total_earnings": getattr(r, "total_earnings", 0.0),
+            "average_rating": getattr(r, "average_rating", 0.0),
+            "rating_count": getattr(r, "rating_count", 0)
         })
     return response_data
 
@@ -936,8 +937,19 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @app.get("/api/restaurant/me")
 def get_my_profile(res: Restaurant = Depends(get_current_restaurant), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == res.email).first()
-    return {"id": res.id, "name": res.name, "email": res.email, "address": res.address, "is_active": res.is_active, "profile_image": res.profile_image, "username": user.username if user else None}
-
+    return {
+        "id": res.id, 
+        "name": res.name, 
+        "email": res.email, 
+        "address": res.address, 
+        "is_active": res.is_active, 
+        "profile_image": res.profile_image, 
+        "username": user.username if user else None,
+        
+        # 👇 ADD THESE TWO LINES 👇
+        "average_rating": res.average_rating,
+        "rating_count": res.rating_count
+    }
 
 class GoogleAuthRequest(BaseModel):
     token: str
@@ -1361,6 +1373,44 @@ def rate_rider(
         "average_rating": round(avg_rating, 2)
     }
 
+
+class RatingRequest(BaseModel):
+    rating: int
+
+@app.post("/api/restaurants/{restaurant_id}/rate")
+def rate_restaurant(
+    restaurant_id: int, 
+    rating_data: RatingRequest, 
+    db: Session = Depends(get_db), 
+    current_user = Depends(get_current_user) # Ensures they are logged in
+):
+    # 1. Find the restaurant
+    restaurant = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+        
+    # 2. Validate the rating (must be 1, 2, 3, 4, or 5)
+    if rating_data.rating < 1 or rating_data.rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+        
+    # 3. Calculate the new average mathematically
+    # (Current Average * Current Count) + New Rating / (Current Count + 1)
+    current_total_score = restaurant.average_rating * restaurant.rating_count
+    new_total_score = current_total_score + rating_data.rating
+    
+    restaurant.rating_count += 1
+    restaurant.average_rating = round(new_total_score / restaurant.rating_count, 1)
+    
+    # 4. Save to database
+    db.commit()
+    db.refresh(restaurant)
+
+    return {
+        "success": True, 
+        "message": "Rating submitted successfully!", 
+        "new_average": restaurant.average_rating,
+        "total_reviews": restaurant.rating_count
+    }
 
 @app.websocket("/api/ws/track/{order_id}")
 async def track_order_ws(websocket: WebSocket, order_id: int):
