@@ -106,10 +106,10 @@ const CheckoutModal = ({ isOpen, onClose, total, address, onSuccess, userEmail, 
         <AnimatePresence>
             {isOpen && (
                 <>
-                    <div className="fixed inset-0 bg-black/60 z-[80]" onClick={onClose} />
+                    <div className="fixed inset-0 bg-black/60 z-[180]" onClick={onClose} />
                     <motion.div
                         initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-                        className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-[90] p-6 md:max-w-md md:mx-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:rounded-3xl"
+                        className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-[180] p-6 md:max-w-md md:mx-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:rounded-3xl"
                     >
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-bold text-stone-800">Payment Method</h2>

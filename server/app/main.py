@@ -234,12 +234,7 @@ def place_order(order_data: OrderCreate, current_user: dict = Depends(get_curren
 
 
 @app.get("/api/orders/history")
-def get_order_history(
-    current_user: dict = Depends(get_current_user), 
-    db: Session = Depends(get_db)
-):
-    # 1. Fetch only past orders (delivered or cancelled) for this specific user
-    #    Sorted by newest first
+def get_order_history(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     orders = db.query(Order).filter(
         Order.user_id == current_user["id"],
         Order.status.in_(["delivered", "cancelled"])
@@ -247,19 +242,19 @@ def get_order_history(
     
     response_data = []
     for o in orders:
-        # 2. Format the items so React can easily read them
         items_list = []
         for item in o.items:
             items_list.append({
+                "menu_item_id": item.menu_item_id, # <--- WE NEED THIS FOR REORDER
                 "name": item.name,
-                "qty": getattr(item, "quantity", 1) # React expects 'qty'
+                "qty": getattr(item, "quantity", 1)
             })
             
-        # 3. Build the final order dictionary
         response_data.append({
             "id": o.id,
             "status": o.status,
             "total_amount": o.total_amount,
+            "restaurant_id": o.restaurant_id, # <--- WE NEED THIS TO REDIRECT
             "restaurant_name": o.restaurant.name if o.restaurant else "Unknown Restaurant",
             "items": items_list,
             "created_at": o.created_at.isoformat() if o.created_at else None

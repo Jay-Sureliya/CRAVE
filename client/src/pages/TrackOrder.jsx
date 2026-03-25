@@ -44,7 +44,6 @@ const geocodeAddress = async (address) => {
   return [22.3039 + latOffset, 70.8022 + lngOffset];
 };
 
-// --- INTERACTIVE AUTO-PANNING CAMERA ---
 const MapUpdater = ({ riderLocation, autoCenter, setAutoCenter }) => {
   const map = useMap();
 
@@ -73,7 +72,6 @@ const TrackOrder = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // DYNAMIC MAP STATES
   const [restaurantLoc, setRestaurantLoc] = useState(null);
   const [customerLoc, setCustomerLoc] = useState(null);
   const [routeLine, setRouteLine] = useState([]);
@@ -91,10 +89,9 @@ const TrackOrder = () => {
   const intervalRef = useRef(null);
   const wsRef = useRef(null);
 
-  /* ================= FETCH LIVE ORDER & GEOCODE ================= */
   useEffect(() => {
     const fetchOrder = async () => {
-      const token = sessionStorage.getItem("token");
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       if (!token) { navigate("/login"); return; }
 
       try {
@@ -116,7 +113,6 @@ const TrackOrder = () => {
           setRestaurantLoc(rLoc);
           setCustomerLoc(cLoc);
 
-          // FIX: Only set initial location if the rider is NOT already moving
           if (!riderLocation) {
             if (data.rider_location && data.rider_location.lat) {
               setRiderLocation([data.rider_location.lat, data.rider_location.lng]);
@@ -136,12 +132,10 @@ const TrackOrder = () => {
     };
 
     fetchOrder();
-    // Increase polling interval so it doesn't fight with the websocket/simulator
     intervalRef.current = setInterval(fetchOrder, 15000); 
     return () => clearInterval(intervalRef.current);
   }, [navigate, riderLocation]);
 
-  /* ================= FETCH DYNAMIC ROAD ROUTE ================= */
   useEffect(() => {
     if (restaurantLoc && customerLoc) {
       fetch(`https://router.project-osrm.org/route/v1/driving/${restaurantLoc[1]},${restaurantLoc[0]};${customerLoc[1]},${customerLoc[0]}?overview=full&geometries=geojson`)
@@ -155,7 +149,6 @@ const TrackOrder = () => {
     }
   }, [restaurantLoc, customerLoc]);
 
-  /* ================= BULLETPROOF WEBSOCKET ================= */
   useEffect(() => {
     if (!order || !order.id || activeTab !== "live") return;
     if (wsRef.current) { wsRef.current.close(); }
@@ -166,7 +159,6 @@ const TrackOrder = () => {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.lat && data.lng) {
-          // FIX: Don't let websocket override if they reached the end
           setRiderLocation([data.lat, data.lng]);
       }
     };
@@ -174,12 +166,11 @@ const TrackOrder = () => {
     return () => { if (wsRef.current) { wsRef.current.close(); wsRef.current = null; } };
   }, [order?.id, activeTab]);
 
-  /* ================= FETCH HISTORY & HANDLERS ================= */
   useEffect(() => {
     if (activeTab === "history") {
       const fetchHistory = async () => {
         setLoadingHistory(true);
-        const token = sessionStorage.getItem("token");
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         try {
           const res = await fetch("http://localhost:8000/api/orders/history", { headers: { Authorization: `Bearer ${token}` } });
           if (res.ok) { setOrderHistory(await res.json()); }
@@ -191,7 +182,7 @@ const TrackOrder = () => {
 
   const sendMessage = async () => {
     if (!message.trim()) return;
-    const token = sessionStorage.getItem("token");
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     try {
       const res = await fetch(`http://localhost:8000/api/orders/${order.id}/message-rider`, {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -202,7 +193,7 @@ const TrackOrder = () => {
   };
 
   const handleRatingSubmit = async () => {
-    const token = sessionStorage.getItem("token");
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     try {
       await fetch(`http://localhost:8000/api/orders/${lastActiveOrder.current.id}/rate-rider`, {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -210,6 +201,59 @@ const TrackOrder = () => {
       });
     } catch (err) { }
     navigate("/");
+  };
+
+  /* ================= NEW REORDER FUNCTION WITH EVENT DISPATCH ================= */
+  const handleReorder = async (pastOrder) => {
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+    if (!token) {
+      addToast("Please login to reorder", "error");
+      return;
+    }
+
+    try {
+      // Loop through all items in the past order and add them to the cart
+      for (const item of pastOrder.items) {
+        if (!item.menu_item_id) {
+            console.warn(`Missing menu_item_id for ${item.name}. Ensure backend is sending it!`);
+            continue;
+        }
+
+        await fetch("http://localhost:8000/api/cart", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            menu_item_id: item.menu_item_id,
+            quantity: item.qty || 1,
+            customization: "[]"
+          })
+        });
+      }
+
+      addToast("Items added to your cart!", "success");
+      
+      // Update cart count globally
+      window.dispatchEvent(new Event('cart-updated'));
+      
+      // Redirect user to that restaurant's page
+      if (pastOrder.restaurant_id) {
+         navigate(`/rest/${pastOrder.restaurant_id}`);
+      } else {
+         navigate("/");
+      }
+
+      // Tell the Navbar to open the cart automatically after a tiny delay
+      setTimeout(() => {
+          window.dispatchEvent(new Event('open-cart'));
+      }, 300);
+
+    } catch (error) {
+      console.error("Reorder failed", error);
+      addToast("Failed to reorder items", "error");
+    }
   };
 
   const getStep = (status) => {
@@ -269,7 +313,6 @@ const TrackOrder = () => {
 
                   <div className="bg-zinc-200 rounded-3xl overflow-hidden shadow-sm border border-zinc-200 relative h-[400px] z-0">
                     {order?.rider_info && restaurantLoc && customerLoc && riderLocation ? (
-                      // FIX: MapContainer should only contain valid Leaflet components
                       <MapContainer
                         center={riderLocation}
                         zoom={14}
@@ -292,11 +335,9 @@ const TrackOrder = () => {
                         </Marker>
                       </MapContainer>
                     ) : (
-                      // Fallback when rider info is not available yet
                       <div className="h-full w-full bg-zinc-900 relative flex items-center justify-center"><div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div><div className="relative flex items-center justify-center"><div className="absolute w-24 h-24 bg-orange-500/20 rounded-full animate-ping"></div><div className="absolute w-16 h-16 bg-orange-500/40 rounded-full animate-pulse"></div><div className="relative z-10 bg-orange-500 p-3 rounded-full text-white shadow-[0_0_20px_rgba(249,115,22,0.6)] border-2 border-white/20"><Store size={24} /></div></div></div>
                     )}
 
-                    {/* STATUS BADGE: Overlay UI must be outside the MapContainer! */}
                     <div className="absolute top-4 left-4 z-[400] bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl text-zinc-900 font-bold text-xs tracking-wider flex items-center gap-2 shadow-lg border border-white">
                       <span className={`w-2 h-2 rounded-full animate-pulse ${order?.rider_info ? 'bg-emerald-500' : 'bg-amber-500'}`}></span> {order?.rider_info ? 'LIVE GPS' : 'AWAITING RIDER'}
                     </div>
@@ -377,7 +418,12 @@ const TrackOrder = () => {
                     </div>
                     <div className="flex justify-between items-end border-t border-zinc-100 pt-4">
                       <div className="text-xl font-black text-zinc-900">₹{pastOrder.total_amount || pastOrder.total}</div>
-                      <button onClick={() => navigate("/")} className="flex items-center gap-2 text-xs font-bold text-white bg-zinc-900 hover:bg-black px-4 py-2.5 rounded-xl transition-colors"><RotateCcw size={14} /> Reorder</button>
+                      <button 
+                        onClick={() => handleReorder(pastOrder)} 
+                        className="flex items-center gap-2 text-xs font-bold text-white bg-zinc-900 hover:bg-black px-4 py-2.5 rounded-xl transition-colors active:scale-95"
+                      >
+                        <RotateCcw size={14} /> Reorder
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -387,12 +433,14 @@ const TrackOrder = () => {
         )}
       </div>
 
+      {/* Message Box Modal */}
       <AnimatePresence>
         {showMessageBox && (
           <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4"><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white p-6 rounded-[2rem] w-full max-w-sm shadow-xl"><div className="flex justify-between items-center mb-5"><h3 className="font-bold text-lg text-zinc-900">Message Rider</h3><button onClick={() => setShowMessageBox(false)} className="p-2 bg-zinc-50 rounded-full text-zinc-500 hover:bg-zinc-100"><X size={18} /></button></div><textarea className="w-full bg-zinc-50 border border-zinc-200 focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/20 outline-none p-4 rounded-xl text-sm font-medium transition-all resize-none" rows="4" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="E.g. Please leave at the door..." /><button onClick={sendMessage} className="bg-orange-500 hover:bg-orange-600 text-white w-full mt-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md"><Send size={16} /> Send</button></motion.div></div>
         )}
       </AnimatePresence>
 
+      {/* Rating Modal */}
       <AnimatePresence>
         {showRatingPopup && (
           <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4"><motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl"><div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 size={40} strokeWidth={3} /></div><h2 className="text-3xl font-black mb-2 text-zinc-900 tracking-tight">Delivered!</h2><p className="text-zinc-500 font-medium mb-8 leading-relaxed">How was your delivery experience with <br /><span className="text-zinc-900 font-bold">{lastActiveOrder.current?.rider_info?.name || 'the rider'}</span>?</p><div className="flex justify-center gap-2 mb-8">{[1, 2, 3, 4, 5].map((s) => (<button key={s} onClick={() => setRating(s)} className="outline-none transform transition-transform hover:scale-110 active:scale-90"><Star size={42} className={`transition-all duration-300 ${s <= rating ? "text-orange-500 fill-orange-500 drop-shadow-md" : "text-zinc-200 fill-zinc-100"}`} /></button>))}</div><div className="flex flex-col gap-3"><button onClick={handleRatingSubmit} disabled={rating === 0} className={`w-full font-bold py-4 rounded-xl transition-all active:scale-95 ${rating > 0 ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-md' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>Submit Feedback</button><button onClick={() => { setShowRatingPopup(false); navigate('/'); }} className="w-full text-zinc-500 font-bold py-3 rounded-xl hover:bg-zinc-50 transition-colors">Skip for now</button></div></motion.div></div>

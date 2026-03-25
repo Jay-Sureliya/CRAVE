@@ -7,13 +7,14 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// --- IMAGE HELPER ---
+// --- IMAGE HELPER (Fixed with cache-busting) ---
 const getImageUrl = (item) => {
   if (!item) return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80";
   if (item.image && (item.image.startsWith("data:") || item.image.startsWith("http"))) {
     return item.image;
   }
-  return `http://localhost:8000/api/menu/image/${item.id}`;
+  // Automatically fetch from backend API if no direct image string is provided
+  return `http://localhost:8000/api/menu/image/${item.id}?t=${new Date().getTime()}`;
 };
 
 // --- TOAST COMPONENT ---
@@ -196,7 +197,6 @@ const RestaurantDetails = () => {
     }
   };
 
-  // --- SUBMIT RESTAURANT RATING ---
   const handleRateRestaurant = async () => {
     const token = getToken();
     if (!token) {
@@ -212,7 +212,6 @@ const RestaurantDetails = () => {
         });
         showToast("Thank you for your rating!", "success");
         
-        // INSTANT UI UPDATE: Update the local restaurant state with the new backend data
         if (response.data && response.data.new_average !== undefined) {
             setRestaurant(prev => ({
                 ...prev,
@@ -260,7 +259,6 @@ const RestaurantDetails = () => {
           ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-10 h-auto md:h-72">
                   
-                  {/* Hero Image */}
                   <div className="md:col-span-2 relative rounded-[2rem] md:rounded-[2.5rem] overflow-hidden shadow-sm border border-stone-100 group">
                       <img 
                           src={restaurant?.profile_image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1920&q=80"} 
@@ -280,7 +278,6 @@ const RestaurantDetails = () => {
 
                   <div className="grid grid-rows-2 gap-4 md:gap-6">
                       
-                      {/* INTERACTIVE RATING BLOCK (Now completely dynamic) */}
                       <div 
                         onClick={() => setShowRatingModal(true)}
                         className="bg-white rounded-[2rem] md:rounded-[2.5rem] p-6 shadow-sm border border-stone-200 flex flex-col justify-center relative overflow-hidden cursor-pointer group hover:border-rose-200 transition-colors"
@@ -306,7 +303,6 @@ const RestaurantDetails = () => {
                           </p>
                       </div>
 
-                      {/* LOCATION BLOCK */}
                       <div className="bg-stone-900 rounded-[2rem] md:rounded-[2.5rem] p-6 shadow-lg flex flex-col justify-center relative overflow-hidden">
                           <div className="absolute -right-4 -bottom-4 w-32 h-32 bg-stone-800 rounded-full blur-2xl"></div>
                           <div className="flex items-center gap-3 mb-3 relative z-10">
@@ -388,7 +384,6 @@ const RestaurantDetails = () => {
           </div>
       </div>
 
-      {/* ================= RATING MODAL ================= */}
       <AnimatePresence>
         {showRatingModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -480,8 +475,9 @@ const MenuCard = ({ item, qty, onUpdate, isFav, onFav }) => {
       </button>
 
       <div className="relative w-full h-48 md:h-52 flex-shrink-0 rounded-[1.5rem] overflow-hidden bg-stone-100 mb-4 border border-stone-100/50">
+         {/* FIX: USING getImageUrl(item) HERE! */}
          <img
-          src={item.image ? item.image : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80"} 
+          src={getImageUrl(item)} 
           alt={item.name} 
           loading="lazy"
           onLoad={() => setImgLoaded(true)}

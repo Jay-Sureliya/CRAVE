@@ -44,9 +44,7 @@ class MenuItem(Base):
     
     is_veg = Column(Boolean, default=True)
     is_available = Column(Boolean, default=True)
-    
-    # --- NEW FIELD FOR ADDONS ---
-    # Stores JSON string like: '[{"name": "Cheese", "price": 20}, ...]'
+
     addons = Column(Text, default="[]")
 
     image = deferred(Column(Text, nullable=True))
