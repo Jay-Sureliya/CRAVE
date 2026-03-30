@@ -15,9 +15,7 @@ import FoodItemDetails from "./pages/FoodItemDetails.jsx";
 import ContactUs from "./pages/ContactUs.jsx";
 import { ToastProvider } from "./context/ToastContext";
 import Toast from "./components/Toast";
-
-// --- PLACEHOLDERS ---
-const OrderFood = () => <div className="p-20 text-center text-2xl">🍔 Customer Menu (Order Now Page)</div>;
+import Chatbot from "./components/Chatbot.jsx";
 
 // --- PROTECTED ROUTE WRAPPER ---
 const ProtectedRoute = ({ role, children }) => {
@@ -36,6 +34,7 @@ function App() {
     <ToastProvider>
       <BrowserRouter>
         <Toast />
+        <Chatbot />
         {/* <Navbar /> */}
         <Routes>
           <Route element={<MainLayout />}>
@@ -51,7 +50,7 @@ function App() {
             <Route path="/menu-item/:id" element={<FoodItemDetails />} /> {/* Add this line */}
 
             <Route path="/track-order" element={<TrackOrder />} />
-            <Route path="/order-food" element={<OrderFood />} />
+            {/* <Route path="/order-food" element={<OrderFood />} /> */}
             <Route path="/login" element={<Login />} />
           </Route>
           {/* --- PROTECTED: ADMIN --- */}

@@ -23,6 +23,22 @@ import razorpay
 # 1. LOAD ENVIRONMENT FIRST
 load_dotenv() 
 
+import re
+from google import genai
+from google.genai import types
+
+# 1. Initialize the client (it reads from your .env automatically)
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+# 2. Re-create the chat session so your endpoint can use it!
+# We use 1.5-flash here because it has the massive 1,500 requests/day free quota
+chat_session = client.chats.create(
+    model="gemini-2.5-flash", 
+    config=types.GenerateContentConfig(
+        system_instruction="You are the official CRAVE food delivery AI assistant. You are helpful, polite, and concise."
+    )
+)
+
 # 2. INTERNAL DB & MODEL IMPORTS
 from app.db.session import engine, Base, get_db
 from app.models.user import User, Restaurant, Favorite
@@ -1435,6 +1451,149 @@ async def update_rider_location(order_id: int, location: LocationUpdate):
     await manager.broadcast_to_order(order_id, {"lat": location.lat, "lng": location.lng})
     
     return {"status": "success", "message": "Location broadcasted"}
+    
+
+
+
+
+
+# --- 1. THE SAFE DATA EXTRACTOR (With IDs for Links) ---
+def get_safe_database_context(db: Session):
+    """
+    Pulls live data and includes IDs so the AI can generate clickable links.
+    STRICTLY excludes sensitive user/owner data.
+    """
+    restaurants = db.query(Restaurant).filter(Restaurant.is_active == True).all()
+    
+    safe_data = []
+    for res in restaurants:
+        menu_items = db.query(MenuItem).filter(
+            MenuItem.restaurant_id == res.id,
+            MenuItem.is_available == True
+        ).all()
+        
+        # We include the ID here so the AI knows where to link the user
+        items_list = [
+            f"{m.name} (ID:{m.id}, Price:₹{m.price}, {'Veg' if m.is_veg else 'Non-Veg'})" 
+            for m in menu_items
+        ]
+        
+        items_str = ", ".join(items_list)
+        
+        safe_data.append(
+            f"RESTAURANT: '{res.name}' (Address: {res.address}). "
+            f"MENU: [{items_str if items_str else 'No items available right now'}]"
+        )
+        
+    total_riders = db.query(Rider).filter(Rider.is_active == True).count()
+    
+    full_safe_text = "\n".join(safe_data)
+    full_safe_text += f"\nPlatform Stats: {total_riders} riders are currently active."
+    
+    return full_safe_text
+
+
+# --- 2. REQUEST MODEL ---
+class ChatRequest(BaseModel):
+    message: str
+    user_id: Optional[int] = None
+
+
+# --- 3. THE FINAL CHAT ENDPOINT ---
+@app.post("/api/chat")
+def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
+    try:
+        msg = request.message.lower()
+        # Define keywords for tracking logic
+        msg_words = set(re.findall(r'\b\w+\b', msg))
+
+        # --- STEP A: SMART ORDER TRACKING (Database Query) ---
+        if (
+            "track" in msg_words or 
+            "active" in msg_words or 
+            "status" in msg_words or
+            ("my" in msg_words and "order" in msg_words) or 
+            ("where" in msg_words and "order" in msg_words)
+        ):
+            if request.user_id:
+                active_order = db.query(Order).filter(
+                    Order.user_id == request.user_id,
+                    Order.status.notin_(["delivered", "cancelled"])
+                ).order_by(Order.created_at.desc()).first()
+
+                if active_order:
+                    res_name = active_order.restaurant.name if active_order.restaurant else "the restaurant"
+                    status_map = {
+                        "pending": "is awaiting restaurant acceptance.",
+                        "accepted": "is currently being prepared!",
+                        "ready": "is ready and waiting for a rider.",
+                        "out_for_delivery": "is on the way with your rider! 🛵"
+                    }
+                    friendly_status = status_map.get(active_order.status, f"is currently: {active_order.status}")
+                    return {"reply": f"I found your active order from {res_name}! It {friendly_status}"}
+                else:
+                    return {"reply": "You don't have any active orders right now. Want to explore the menu?"}
+            else:
+                return {"reply": "Please log in so I can check your active orders!"}
+
+        # --- STEP B: SAFE AI CHAT (With Link Generation) ---
+        safe_context = get_safe_database_context(db)
+
+        # Instructions telling the AI to use Markdown links for your React routes
+        live_prompt = f"""
+            You are the CRAVE assistant. 
+
+            DATABASE STATE:
+            {safe_context}
+
+            INSTRUCTIONS:
+            1. Be friendly and concise.
+            2. If a user asks for food, list the items and their prices.
+            3. For EVERY food item you mention, you MUST append this exact button trigger: [Add ItemName ID:ItemID]
+            4. DO NOT use standard markdown links or parentheses. 
+            5. Example: "Devi offers Dosa for ₹97. [Add Dosa ID:1] and Pizza for ₹243. [Add Pizza ID:3]"
+            """
+        
+        # Send context + instructions to Gemini
+        response = chat_session.send_message(live_prompt)
+        
+        return {"reply": response.text}
+        
+    except Exception as e:
+        print(f"Chat Error: {e}")
+        return {"reply": "I'm having a little trouble connecting to the database. Please try again in a second!"}
+
+
+
+# --- ADD THIS TO main.py ---
+
+class CartRequest(BaseModel):
+    user_id: int
+    menu_item_id: int
+    quantity: int
+
+@app.post("/api/cart/add") # 👈 This must match the React fetch URL exactly!
+def add_to_cart(request: CartRequest, db: Session = Depends(get_db)):
+    # 1. Check if item already exists in user's cart
+    existing_item = db.query(Cart).filter(
+        Cart.user_id == request.user_id, 
+        Cart.menu_item_id == request.menu_item_id
+    ).first()
+
+    if existing_item:
+        existing_item.quantity += request.quantity
+    else:
+        # 2. Add new item
+        new_cart_item = Cart(
+            user_id=request.user_id,
+            menu_item_id=request.menu_item_id,
+            quantity=request.quantity
+        )
+        db.add(new_cart_item)
+    
+    db.commit()
+    return {"status": "success", "message": "Item added to cart"}
+
     
 if __name__ == "__main__":
     import uvicorn

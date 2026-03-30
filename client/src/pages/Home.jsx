@@ -17,7 +17,7 @@ const Home = () => {
         let intervalId;
 
         const checkActiveOrder = async () => {
-            // 🚨 THE FIX: Looking in sessionStorage instead of localStorage 🚨
+
             const token = sessionStorage.getItem('token');
 
             if (!token) {
@@ -87,13 +87,6 @@ const Home = () => {
                         <span className="text-[#FF8A00]">Fast and Fresh</span>
                     </h1>
 
-                    <div className="mt-2 w-full max-w-sm">
-                        <p className="text-gray-500 text-xs mb-3 ml-2">Enter a postcode to see what we deliver</p>
-                        <div className="relative flex items-center w-full bg-white rounded-full border border-gray-200 shadow-lg p-1.5 focus-within:ring-2 ring-orange-100">
-                            <input type="text" placeholder="e.g. EC4R 3TE" className="flex-grow bg-transparent px-6 py-3 text-slate-700 outline-none" />
-                            <button className="bg-[#FF8A00] hover:bg-[#ff9f2e] text-white rounded-full px-8 py-3.5 font-bold text-sm shadow-md">Search</button>
-                        </div>
-                    </div>
                 </div>
 
                 <div className="flex-1 relative h-[500px] lg:h-auto w-full">

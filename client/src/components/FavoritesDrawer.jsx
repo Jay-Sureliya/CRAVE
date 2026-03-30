@@ -1,10 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react'; // 👈 Added useEffect
 import { useNavigate } from 'react-router-dom';
 import { X, Trash2, Heart, ArrowRight, ShoppingBag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const FavoritesDrawer = ({ isOpen, onClose, favItems = [], onRemove }) => {
     const navigate = useNavigate();
+
+    // --- 🚨 NEW: SIGNAL CHATBOT TO HIDE/SHOW ---
+    useEffect(() => {
+        // We use the same 'crave:cartToggle' signal so the chatbot 
+        // treats this drawer the same way it treats the Cart sidebar.
+        window.dispatchEvent(new CustomEvent('crave:cartToggle', { detail: isOpen }));
+        
+        // Cleanup when the drawer is closed or unmounted
+        return () => {
+            window.dispatchEvent(new CustomEvent('crave:cartToggle', { detail: false }));
+        };
+    }, [isOpen]);
 
     const handleViewItem = (id) => {
         navigate(`/menu-item/${id}`);
@@ -78,7 +90,6 @@ const FavoritesDrawer = ({ isOpen, onClose, favItems = [], onRemove }) => {
                                         key={item.id} 
                                         className="bg-white p-4 rounded-[2rem] border border-zinc-100 shadow-sm flex gap-4 group hover:shadow-md transition-all duration-300"
                                     >
-                                        {/* Image Container */}
                                         <div 
                                             onClick={() => handleViewItem(item.id)}
                                             className="w-24 h-24 bg-zinc-100 rounded-2xl overflow-hidden shrink-0 cursor-pointer relative"
@@ -91,7 +102,6 @@ const FavoritesDrawer = ({ isOpen, onClose, favItems = [], onRemove }) => {
                                             <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </div>
                                         
-                                        {/* Details */}
                                         <div className="flex-1 flex flex-col justify-between py-1">
                                             <div className="flex justify-between items-start">
                                                 <div 
@@ -108,7 +118,6 @@ const FavoritesDrawer = ({ isOpen, onClose, favItems = [], onRemove }) => {
                                                 <button 
                                                     onClick={() => onRemove(item.id)} 
                                                     className="w-8 h-8 flex items-center justify-center text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all active:scale-90"
-                                                    title="Remove from favorites"
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>
@@ -131,7 +140,7 @@ const FavoritesDrawer = ({ isOpen, onClose, favItems = [], onRemove }) => {
                             )}
                         </div>
 
-                        {/* --- FOOTER ACTION (Only if items exist) --- */}
+                        {/* --- FOOTER ACTION --- */}
                         {favItems.length > 0 && (
                             <div className="p-6 bg-white border-t border-zinc-100 shrink-0">
                                 <button
