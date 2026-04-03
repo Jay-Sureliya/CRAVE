@@ -55,7 +55,7 @@ const Home = () => {
         // Only start polling if a token exists
         const initialToken = sessionStorage.getItem('token');
         if (initialToken) {
-            intervalId = setInterval(checkActiveOrder, 10000); // Check every 10 seconds
+            intervalId = setInterval(checkActiveOrder, 10000);
         }
 
         return () => clearInterval(intervalId);
