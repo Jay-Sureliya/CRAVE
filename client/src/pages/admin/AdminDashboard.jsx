@@ -173,8 +173,8 @@ const AdminDashboard = () => {
   const fetchData = async (isPolling = false) => {
     try {
       const [reqRes, riderReqRes, restaurantsRes, usersRes, messagesRes] = await Promise.allSettled([
-        api.get("/admin/requests"),
-        api.get("/admin/rider-requests"),
+        api.get("api/admin/requests"),
+        api.get("api/admin/rider-requests"),
         api.get("/restaurants"),
         api.get("/admin/users"),
         api.get("/api/admin/messages")
@@ -256,7 +256,7 @@ const AdminDashboard = () => {
         setRiderRequests(prev => prev.filter(req => req.id !== confirmActionId));
         showToast("Rider application rejected.", "info");
       } else if (confirmAction === 'delete-restaurant') {
-        await api.delete(`/admin/restaurants/${confirmActionId}`);
+        await api.delete(`/api/admin/restaurants/${confirmActionId}`);
         setActiveRestaurants(prev => prev.filter(r => r.id !== confirmActionId));
         showToast("Restaurant deleted.", "error");
       } else if (confirmAction === 'suspend-user') {
