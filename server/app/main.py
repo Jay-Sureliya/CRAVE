@@ -1246,7 +1246,62 @@ def submit_rider_request(request: RiderRequestCreate, db: Session = Depends(get_
     db.commit()
     return {"message": "Rider Application Received!"}
 
+# ==============================================================================
+#  ADMIN FETCH REQUESTS ROUTES
+# ==============================================================================
 
+@app.get("/api/admin/requests")
+def get_pending_restaurant_requests(db: Session = Depends(get_db)):
+    # Fetch all restaurant requests with a 'pending' status
+    requests = db.query(RestaurantRequest).filter(RestaurantRequest.status == "pending").all()
+    return requests
+
+@app.get("/api/admin/rider-requests")
+def get_pending_rider_requests(db: Session = Depends(get_db)):
+    # Fetch all rider requests with a 'pending' status
+    requests = db.query(RiderRequest).filter(RiderRequest.status == "pending").all()
+    return requests
+
+
+
+@app.delete("/api/admin/restaurants/{restaurant_id}")
+def delete_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
+    try:
+        # 1. Find the restaurant
+        restaurant = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+        
+        if not restaurant:
+            raise HTTPException(status_code=404, detail="Restaurant not found")
+
+        # 2. CLEAR MENU ITEMS
+        db.query(MenuItem).filter(MenuItem.restaurant_id == restaurant_id).delete(synchronize_session=False)
+
+        # 3. CLEAR RESTAURANT ORDERS 
+        # (Prevents the inevitable 'orders_restaurant_id_fkey' crash)
+        # Note: In a real-world app, you might "soft-delete" these or keep them for accounting, 
+        # but to actually delete the restaurant, they must go.
+        db.query(Order).filter(Order.restaurant_id == restaurant_id).delete(synchronize_session=False)
+
+        # 4. HANDLE THE USER (Fixes your current crash)
+        user = db.query(User).filter(User.email == restaurant.email).first()
+        if user:
+            # Downgrade them to a customer instead of deleting them.
+            # This preserves their personal order history and prevents the crash.
+            user.role = "customer"
+            # NOTE: We are NOT calling db.delete(user) anymore!
+
+        # 5. Delete the restaurant itself
+        db.delete(restaurant)
+        db.commit()
+        
+        return {"message": "Restaurant and associated data deleted successfully"}
+        
+    except Exception as e:
+        db.rollback() # Undo the transaction if it fails
+        print(f"❌ Deletion Error: {e}") 
+        raise HTTPException(status_code=500, detail=str(e))
+
+        
 class AddressUpdate(BaseModel):
     address: str
 
