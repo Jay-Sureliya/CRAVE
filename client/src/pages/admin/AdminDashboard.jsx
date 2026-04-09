@@ -37,7 +37,7 @@ const DetailModal = ({ data, type, onClose }) => {
   const rawRating = data.average_rating || data.rating || 0;
   const ratingValue = rawRating > 0 ? Number(rawRating).toFixed(1) : "New";
   const ratingCount = data.rating_count || 0;
-  
+
   const rawEarnings = Number(data.total_earnings || data.earnings || 0);
   const rawSpent = Number(data.total_spent || 0);
 
@@ -104,7 +104,7 @@ const DetailModal = ({ data, type, onClose }) => {
                   <Star className="text-orange-500 mb-2" size={20} />
                   <p className="text-xs text-gray-500">Rating</p>
                   <p className="text-xl font-bold text-gray-900">
-                      {ratingValue} <span className="text-xs text-gray-400 font-normal">/ 5.0</span>
+                    {ratingValue} <span className="text-xs text-gray-400 font-normal">/ 5.0</span>
                   </p>
                   {/* FIX: Now shows review count for both Restaurants AND Riders */}
                   {ratingCount > 0 && <p className="text-[10px] text-gray-400 mt-1">{ratingCount} Reviews</p>}
@@ -535,10 +535,10 @@ const AdminDashboard = () => {
                           <td className="px-6 py-4 font-bold text-gray-900">{r.name}</td>
                           <td className="px-6 py-4 text-gray-500 text-sm">{r.address || r.location || "N/A"}</td>
                           <td className="px-6 py-4">
-                              <span className="flex items-center gap-1 text-sm font-bold text-slate-700">
-                                  <Star size={14} className="fill-amber-400 text-amber-400" />
-                                  {r.average_rating > 0 ? Number(r.average_rating).toFixed(1) : "New"}
-                              </span>
+                            <span className="flex items-center gap-1 text-sm font-bold text-slate-700">
+                              <Star size={14} className="fill-amber-400 text-amber-400" />
+                              {r.average_rating > 0 ? Number(r.average_rating).toFixed(1) : "New"}
+                            </span>
                           </td>
                           <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${r.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{r.is_active ? "Active" : "Inactive"}</span></td>
                           <td className="px-6 py-4 text-right">
@@ -631,13 +631,13 @@ const AdminDashboard = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-500">{u.email}</td>
-                          
+
                           {/* FIX: DYNAMIC RATING FOR RIDER IN TABLE */}
                           <td className="px-6 py-4">
-                              <span className="flex items-center gap-1 text-sm font-bold text-slate-700">
-                                  <Star size={14} className="fill-amber-400 text-amber-400" />
-                                  {u.rating > 0 ? Number(u.rating).toFixed(1) : "New"}
-                              </span>
+                            <span className="flex items-center gap-1 text-sm font-bold text-slate-700">
+                              <Star size={14} className="fill-amber-400 text-amber-400" />
+                              {u.rating > 0 ? Number(u.rating).toFixed(1) : "New"}
+                            </span>
                           </td>
 
                           <td className="px-6 py-4"><span className="px-2 py-1 rounded-md text-xs font-bold bg-cyan-100 text-cyan-700">Rider</span></td>

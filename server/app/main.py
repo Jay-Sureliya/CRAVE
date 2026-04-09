@@ -64,6 +64,7 @@ from app.schemas.restaurant_request import RestaurantRequestCreate, RestaurantRe
 from app.schemas.rider_request import RiderProfileUpdate , RiderMessage , RiderRating
 from app.schemas.user import PaymentVerification
 from app.schemas.contact import ContactSchema
+from app.schemas.menu import MenuItemResponse
 
 # 3. Import Routes
 from app.routes import restaurant
@@ -1594,6 +1595,64 @@ def add_to_cart(request: CartRequest, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "success", "message": "Item added to cart"}
 
+@app.get("/users/{user_id}/recommendations", response_model=list[MenuItemResponse])
+def get_user_recommendations(user_id: int, db: Session = Depends(get_db)):
+    # 1. Query the user's specific most frequently ordered items
+    user_top_query = (
+        db.query(MenuItem.id)
+        .join(OrderItem, OrderItem.menu_item_id == MenuItem.id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(Order.user_id == user_id)
+        .group_by(MenuItem.id)
+        .order_by(func.count(OrderItem.id).desc())
+        .limit(3)
+    )
+    user_top_ids = [item_id for (item_id,) in user_top_query.all()]
+    
+    # Get the actual objects for the user's past orders
+    recommended_items = []
+    if user_top_ids:
+        recommended_items = db.query(MenuItem).filter(MenuItem.id.in_(user_top_ids)).all()
+
+    # 2. DYNAMIC FALLBACK: If they ordered less than 3 items, fill slots with MOST POPULAR items!
+    if len(recommended_items) < 3:
+        needed_items = 3 - len(recommended_items)
+        
+        # Query the OrderItem table to find what other users order the most
+        popular_items_query = (
+            db.query(MenuItem)
+            .join(OrderItem, OrderItem.menu_item_id == MenuItem.id)
+            .filter(MenuItem.is_available == True)
+        )
+        
+        # Make sure we don't recommend something they already bought
+        if user_top_ids:
+            popular_items_query = popular_items_query.filter(MenuItem.id.notin_(user_top_ids))
+            
+        # Group by the item and sort by how many times it has been ordered globally
+        popular_items = (
+            popular_items_query
+            .group_by(MenuItem.id)
+            .order_by(func.count(OrderItem.id).desc())
+            .limit(needed_items)
+            .all()
+        )
+        
+        recommended_items.extend(popular_items)
+        
+        # 3. ULTIMATE FALLBACK: If your app is brand new and NO ONE has ordered anything yet, 
+        # just grab available items so the screen is never blank.
+        if len(recommended_items) < 3:
+            still_needed = 3 - len(recommended_items)
+            current_ids = [item.id for item in recommended_items]
+            brand_new_items = db.query(MenuItem).filter(
+                MenuItem.is_available == True,
+                MenuItem.id.notin_(current_ids)
+            ).limit(still_needed).all()
+            
+            recommended_items.extend(brand_new_items)
+        
+    return recommended_items
     
 if __name__ == "__main__":
     import uvicorn
