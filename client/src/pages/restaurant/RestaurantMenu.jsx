@@ -13,7 +13,7 @@ const getImageUrl = (item) => {
     if (item.image && (item.image.startsWith("data:") || item.image.startsWith("http"))) return item.image;
     
     // API URL with timestamp to force browser to refresh the image
-    return `http://localhost:8000/api/menu/image/${item.id}?t=${new Date().getTime()}`;
+    return `https://crave-qozy.onrender.com/api/menu/image/${item.id}?t=${new Date().getTime()}`;
 };
 
 const DEFAULT_CATEGORIES = [
@@ -59,8 +59,8 @@ const RestaurantMenu = ({ searchQuery }) => {
             
             // Fetch categories and menu in parallel
             const [catRes, menuRes] = await Promise.all([
-                fetch("http://localhost:8000/api/categories", { headers }).catch(() => null),
-                fetch("http://localhost:8000/api/menu", { headers })
+                fetch("https://crave-qozy.onrender.com/api/categories", { headers }).catch(() => null),
+                fetch("https://crave-qozy.onrender.com/api/menu", { headers })
             ]);
 
             if (catRes && catRes.ok) setDbCategories(await catRes.json());
@@ -169,7 +169,7 @@ const RestaurantMenu = ({ searchQuery }) => {
         if (restaurantId) formData.append("restaurant_id", restaurantId);
 
         try {
-            const url = isEditing ? `http://localhost:8000/api/menu/${editId}` : "http://localhost:8000/api/menu";
+            const url = isEditing ? `https://crave-qozy.onrender.com/api/menu/${editId}` : "https://crave-qozy.onrender.com/api/menu";
             const method = isEditing ? "PUT" : "POST";
             const response = await fetch(url, { method, headers, body: formData });
             
@@ -190,7 +190,7 @@ const RestaurantMenu = ({ searchQuery }) => {
         if (!window.confirm("Permanently delete this dish?")) return;
         const { headers } = getAuthData();
         try {
-            const response = await fetch(`http://localhost:8000/api/menu/${id}`, { method: "DELETE", headers });
+            const response = await fetch(`https://crave-qozy.onrender.com/api/menu/${id}`, { method: "DELETE", headers });
             if (response.ok) {
                 setMenuItems(prev => prev.filter(item => item.id !== id));
                 addToast("Item deleted", "success");
@@ -207,7 +207,7 @@ const RestaurantMenu = ({ searchQuery }) => {
         formData.append("isAvailable", updatedStatus.toString());
         
         try {
-            await fetch(`http://localhost:8000/api/menu/${item.id}`, { method: "PUT", headers, body: formData });
+            await fetch(`https://crave-qozy.onrender.com/api/menu/${item.id}`, { method: "PUT", headers, body: formData });
         } catch (e) { addToast("Status sync failed", "error"); }
     };
 

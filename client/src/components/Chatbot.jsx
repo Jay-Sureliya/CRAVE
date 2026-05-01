@@ -43,7 +43,7 @@ const Chatbot = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/cart/add', {
+      const response = await fetch('https://crave-qozy.onrender.com/api/cart/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -101,7 +101,7 @@ const Chatbot = () => {
     const currentUserId = storedUserId ? parseInt(storedUserId, 10) : null;
 
     try {
-      const response = await fetch('http://localhost:8000/api/chat', {
+      const response = await fetch('https://crave-qozy.onrender.com/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMessage, user_id: currentUserId }),
