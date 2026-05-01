@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { Bot } from "lucide-react";
 
 const Chatbot = () => {
   const location = useLocation();
@@ -29,9 +30,9 @@ const Chatbot = () => {
   // --- 2. HIDE LOGIC ---
   const hiddenPaths = ['/admin', '/restaurant', '/rider'];
   const isPathHidden = hiddenPaths.some(path => location.pathname.startsWith(path));
-  
+
   // Hide if on restricted path OR if the Cart Modal is open
-  const isHidden = isPathHidden || isCartModalOpen; 
+  const isHidden = isPathHidden || isCartModalOpen;
 
   // --- 3. ADD TO CART LOGIC ---
   const handleAddToCart = async (itemId, itemName) => {
@@ -121,7 +122,7 @@ const Chatbot = () => {
           onClick={() => setIsOpen(true)}
           className="w-16 h-16 bg-white text-[#e8601a] rounded-full shadow-2xl flex items-center justify-center text-3xl border border-orange-100 hover:scale-110 active:scale-90 transition-all duration-300 animate-bounce-slow"
         >
-          💬
+          <Bot size={32} strokeWidth={2.5} />
         </button>
       )}
 
