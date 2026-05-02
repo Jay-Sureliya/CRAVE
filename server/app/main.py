@@ -155,7 +155,7 @@ def get_current_restaurant(user: dict = Depends(get_current_user), db: Session =
 @app.get("/api/make-me-admin")
 def make_me_admin(db: Session = Depends(get_db)):
     # Put your exact registered email here!
-    user = db.query(User).filter(User.email == "your_email@example.com").first()
+    user = db.query(User).filter(User.email == "jsureliya732@rku.ac.in").first()
     
     if not user:
         return {"error": "User not found. Did you register on the live site yet?"}
@@ -165,7 +165,7 @@ def make_me_admin(db: Session = Depends(get_db)):
     
     return {"success": True, "message": f"{user.email} is now an ADMIN!"}
 
-    
+
 # ==============================================================================
 #  ORDER MANAGEMENT SYSTEM (USER -> RESTAURANT -> RIDER)
 # ==============================================================================
