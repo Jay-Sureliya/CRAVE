@@ -1,16 +1,80 @@
+<<<<<<< HEAD
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
 class UserCreate(BaseModel):
+=======
+from pydantic import BaseModel, EmailStr, ConfigDict
+from typing import Optional
+
+# --- USER SCHEMAS ---
+class UserBase(BaseModel):
+>>>>>>> Mihir
     username: str
-    password: str
     full_name: str
     email: EmailStr
     phone: Optional[str] = None
+<<<<<<< HEAD
     role: str = "customer"
 
 
+=======
+    role: Optional[str] = "customer"
+
+class UserCreate(UserBase):
+    password: str
+    profile_image: Optional[str] = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+    model_config = ConfigDict(from_attributes=True)
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    profile_image: Optional[str] = None 
+    password: Optional[str] = None 
+    model_config = ConfigDict(from_attributes=True)
+
+>>>>>>> Mihir
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str
     role: str
+<<<<<<< HEAD
+=======
+    username: str
+    user_id: int
+    restaurant_id: Optional[int] = None 
+    model_config = ConfigDict(from_attributes=True)
+
+# --- RESTAURANT SCHEMAS ---
+class RestaurantBase(BaseModel):
+    name: str
+    email: EmailStr
+    is_active: bool = True
+    address: Optional[str] = None
+
+# FAST RESPONSE (No Image) - Use this for Lists
+class RestaurantLite(RestaurantBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+# FULL RESPONSE (With Image) - Use this for Details
+class RestaurantResponse(RestaurantBase):
+    id: int
+    profile_image: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class OrderCreate(BaseModel):
+    address: str
+    payment_method: str # "COD" or "Online"
+    # We calculate total and items from the backend using the Cart to be safe
+
+class OrderStatusUpdate(BaseModel):
+    status: str # "accepted", "preparing", "ready", "out_for_delivery", "delivered"
+
+class PaymentVerification(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+>>>>>>> Mihir

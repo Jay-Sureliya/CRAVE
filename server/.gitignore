@@ -1,5 +1,20 @@
+<<<<<<< HEAD
 venv/
+=======
+.env
+
+# Virtual Environment
+venv/
+
+>>>>>>> Mihir
 .env
 
 __pycache__/
+<<<<<<< HEAD
 *.pyc
+=======
+*.pyc
+
+# IDE specific files (VS Code)
+.vscode/
+>>>>>>> Mihir

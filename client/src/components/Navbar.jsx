@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { Menu, X, User } from "lucide-react";
+import { Menu, X, User, LogOut, ChevronRight } from "lucide-react";
 import TopBanner from "./TopBanner";
+import api from "../services/api";
 
 const Navbar = () => {
     // --- STATE MANAGEMENT ---
@@ -12,36 +13,64 @@ const Navbar = () => {
     // Auth State
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [userRole, setUserRole] = useState(null);
+    const [user, setUser] = useState(null);
 
     const itemsRef = useRef([]);
     const navigate = useNavigate();
     const location = useLocation();
 
+    const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png";
+
+    // --- IMAGE FORMATTER & COMPRESSION ---
+    const getProfileImage = (userData) => {
+        // Check all possible keys
+        const img = userData?.profile_image || userData?.image || userData?.logo;
+
+        if (!img) return DEFAULT_AVATAR;
+
+        // If it's already a base64 string, return it exactly as is
+        if (img.startsWith('data:image')) return img;
+
+        // If it's a path, handle it
+        return img.startsWith('http') ? img : `${api.defaults.baseURL}${img}`;
+    };
+
     const menuItems = [
         { name: "Home", path: "/" },
         { name: "About", path: "/about" },
-        { name: "Special Offer", path: "/special-offer" },
+        { name: "Contact Us", path: "/Contact-us" },
         { name: "Restaurant", path: "/rest" },
         { name: "Track Order", path: "/track-order" },
     ];
 
-    // --- LOGIC ---
+    // Navbar.jsx snippet
     useEffect(() => {
-        // 1. Update Active Menu Item based on URL
-        const currentIndex = menuItems.findIndex(item => item.path === location.pathname);
-        setActiveIndex(currentIndex !== -1 ? currentIndex : -1);
-        
-        // 2. Close mobile menu on route change
-        setIsMenuOpen(false);
+        const storedToken = sessionStorage.getItem("token");
+        const storedUserId = sessionStorage.getItem("user_id");
 
-        // 3. CHECK SESSION STORAGE (Fixes the multiple tab issue)
-        const token = sessionStorage.getItem("token");
-        const role = sessionStorage.getItem("role");
+        // Important: check if storedUserId is "undefined" (string) or null
+        const hasValidId = storedUserId && storedUserId !== "undefined" && storedUserId !== "null";
 
-        setIsLoggedIn(!!token);
-        setUserRole(role);
-        
-    }, [location.pathname]);
+        setIsLoggedIn(!!storedToken && hasValidId);
+
+        const fetchUser = async () => {
+            // Only fetch if we have valid credentials and no user data yet
+            if (storedToken && hasValidId && !user) {
+                try {
+                    const res = await api.get(`/users/${storedUserId}`);
+                    setUser(res.data);
+                    setUserRole(res.data.role);
+                } catch (err) {
+                    if (err.response?.status === 404) {
+                        console.warn("User not found in DB. Cleaning up...");
+                        handleLogout();
+                    }
+                }
+            }
+        };
+
+        fetchUser();
+    }, [location.pathname, navigate]);
 
     // Handle Dashboard Navigation
     const handleProfileClick = () => {
@@ -59,6 +88,14 @@ const Navbar = () => {
         setIsMenuOpen(false);
     };
 
+    const handleLogout = () => {
+        sessionStorage.clear();
+        setIsLoggedIn(false);
+        setUser(null);
+        navigate("/login");
+        setIsMenuOpen(false);
+    };
+
     return (
         /* 'overflow-x-clip' prevents horizontal scrollbars */
         <nav className="sticky top-0 z-50 w-full bg-white overflow-x-clip">
@@ -66,10 +103,8 @@ const Navbar = () => {
             {/* Top Banner */}
             <TopBanner isMapOpen={isMapOpen} setIsMapOpen={setIsMapOpen} />
 
-            {/* Main Nav */}
-            <div className="w-[95%] mx-auto py-4 pb-6  flex items-center justify-between">
-
-                {/* LOGO */}
+            <div className="w-[95%] mx-auto py-4 pb-6 flex items-center justify-between">
+                {/* LOGO (Restored original) */}
                 <div onClick={() => navigate("/")} className="flex items-center gap-2 cursor-pointer group z-50">
                     <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-orange-500/30 transition-transform group-hover:rotate-3">
                         C
@@ -80,11 +115,11 @@ const Navbar = () => {
                     </div>
                 </div>
 
-                {/* DESKTOP MENU */}
+                {/* DESKTOP MENU (Restored original) */}
                 <div className="hidden lg:block">
                     <ul className="flex items-center gap-6">
                         {menuItems.map((item, index) => (
-                            <li key={index} ref={(el) => (itemsRef.current[index] = el)}>
+                            <li key={index}>
                                 <NavLink
                                     to={item.path}
                                     className={({ isActive }) =>
@@ -94,82 +129,160 @@ const Navbar = () => {
                                         }`
                                     }
                                 >
-                                    {item.name === "Home" ? "Home" :
-                                     item.name === "Special Offer" ? "Special Offers" :
-                                     item.name === "Restaurant" ? "Restaurants" :
-                                     item.name}
+                                    {item.name}
                                 </NavLink>
                             </li>
                         ))}
                     </ul>
                 </div>
 
-                {/* --- RIGHT SECTION --- */}
-                <div className="hidden lg:flex items-center gap-3">
+                {/* DESKTOP RIGHT SECTION (Restored original) */}
+                <div className="hidden lg:flex items-center gap-8">
                     {isLoggedIn ? (
-                        /* LOGGED IN: Only Show Dashboard/Profile Button */
                         <button
                             onClick={handleProfileClick}
-                            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-5 py-3 rounded-full font-bold text-sm shadow-md transition-all"
+                            className="group relative flex items-center gap-4 p-1.5 pr-6 rounded-[1.25rem] hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100 shadow-sm hover:shadow-md"
                         >
-                            <User className="w-4 h-4" />
-                            {userRole === 'restaurant' ? 'Dashboard' : 'My Profile'}
+                            <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white shadow-md group-hover:shadow-orange-100 transition-all bg-slate-100">
+                                <img
+                                    src={getProfileImage(user)}
+                                    alt="Profile"
+                                    loading="lazy"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { e.target.src = DEFAULT_AVATAR; }}
+                                />
+                            </div>
+
+                            <div className="text-left hidden lg:block">
+                                <p className="text-[12px] font-black text-slate-900 leading-none uppercase tracking-wider">
+                                    {user?.username || "Account"}
+                                </p>
+                                <p className="text-[10px] font-bold text-orange-500 uppercase tracking-[0.1em] mt-1.5">
+                                    {user?.email || "Email"}
+                                </p>
+                            </div>
                         </button>
                     ) : (
-                        /* NOT LOGGED IN */
                         <button
                             onClick={() => navigate("/login")}
-                            className="cursor-pointer flex items-center gap-3 bg-[#03081F] text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-slate-900 transition-all shadow-lg"
+                            className="cursor-pointer flex items-center gap-4 bg-[#03081F] text-white px-3.5 py-2.5 rounded-full font-bold text-base hover:bg-slate-900 transition-all shadow-xl hover:scale-[1.02] active:scale-95"
                         >
-                            <div className="bg-orange-500 rounded-full p-1">
+                            <div className="bg-orange-500 rounded-full p-2">
                                 <User className="w-4 h-4 text-black fill-black" />
                             </div>
-                            Login/Signup
-                        </button>
+                            Login / Signup
+                        </button> 
                     )}
                 </div>
 
                 {/* MOBILE TOGGLE */}
-                <button className="lg:hidden p-2 text-slate-900" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-                    {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
+                <button 
+                    className="lg:hidden p-2 text-slate-900 z-50 relative" 
+                    onClick={() => setIsMenuOpen(true)}
+                >
+                    <Menu size={28} />
                 </button>
             </div>
 
-            {/* --- MOBILE MENU --- */}
-            <div className={`fixed inset-0 bg-white z-40 flex flex-col items-center justify-center transition-transform duration-300 lg:hidden ${isMenuOpen ? "translate-x-0" : "translate-x-full"}`}>
-                <ul className="flex flex-col items-center gap-6 mb-10 w-full px-8">
-                    {menuItems.map((item, index) => (
-                        <li key={index} className="w-full text-center">
-                            <NavLink
-                                to={item.path}
-                                className={({ isActive }) =>
-                                    `block w-full py-4 text-xl font-bold rounded-2xl transition-all ${isActive ? "bg-orange-500 text-white" : "text-slate-900 bg-gray-50"}`
-                                }
-                                onClick={() => setIsMenuOpen(false)}
-                            >
-                                {item.name}
-                            </NavLink>
-                        </li>
-                    ))}
-                </ul>
+            {/* --- SLIDE-OUT MOBILE DRAWER --- */}
 
-                <div className="w-full px-8 space-y-3">
+            {/* Dark Blurred Overlay */}
+            <div 
+                className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99] transition-opacity duration-300 lg:hidden ${
+                    isMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+            />
+
+            {/* Sliding Drawer */}
+            <div 
+                className={`fixed top-0 right-0 h-[100dvh] w-[85%] sm:w-[380px] bg-white z-[100] flex flex-col shadow-2xl transition-transform duration-300 ease-out lg:hidden ${
+                    isMenuOpen ? "translate-x-0" : "translate-x-full"
+                }`}
+            >
+                {/* Drawer Header */}
+                <div className="flex items-center justify-between p-6 border-b border-slate-100 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-md">
+                            C
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-xl tracking-widest font-extrabold text-slate-900 leading-none">CRAVE</span>
+                            <span className="text-[9px] font-bold text-orange-500 tracking-[0.2em] uppercase mt-1">Menu</span>
+                        </div>
+                    </div>
+                    <button 
+                        className="p-2 bg-slate-50 text-slate-500 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors" 
+                        onClick={() => setIsMenuOpen(false)}
+                    >
+                        <X size={20} strokeWidth={2.5} />
+                    </button>
+                </div>
+
+                {/* Scrollable Navigation Links */}
+                <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
+                    {menuItems.map((item, index) => (
+                        <NavLink
+                            key={index}
+                            to={item.path}
+                            onClick={() => setIsMenuOpen(false)}
+                            className={({ isActive }) =>
+                                `flex items-center justify-between px-6 py-4 rounded-2xl font-bold text-base transition-all duration-200 ${isActive
+                                    ? "bg-orange-50 text-orange-600"
+                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                }`
+                            }
+                        >
+                            {item.name}
+                            <ChevronRight size={18} className="text-slate-300" />
+                        </NavLink>
+                    ))}
+                </div>
+
+                {/* Pinned Bottom Auth/Profile Section */}
+                <div className="p-6 bg-slate-50 border-t border-slate-100 shrink-0 space-y-3">
                     {isLoggedIn ? (
-                        <button
-                            onClick={handleProfileClick}
-                            className="w-full flex justify-center items-center gap-3 bg-orange-500 text-white py-4 rounded-full font-bold text-lg"
-                        >
-                            <User className="w-5 h-5" />
-                            {userRole === 'restaurant' ? 'Open Dashboard' : 'My Profile'}
-                        </button>
+                        <>
+                            {/* User Info Card */}
+                            <div className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-slate-200 mb-4 shadow-sm">
+                                <img
+                                    src={getProfileImage(user)}
+                                    alt="Profile"
+                                    className="w-12 h-12 rounded-xl object-cover border border-slate-100"
+                                    onError={(e) => { e.target.src = DEFAULT_AVATAR; }}
+                                />
+                                <div className="flex flex-col flex-1 overflow-hidden">
+                                    <span className="text-sm font-bold text-slate-900 truncate">{user?.username || "Account"}</span>
+                                    <span className="text-[11px] font-medium text-slate-500 truncate">{user?.email || "Logged in"}</span>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleProfileClick}
+                                className="w-full flex justify-center items-center gap-2 bg-orange-500 text-white py-3.5 rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors shadow-md shadow-orange-500/20"
+                            >
+                                {userRole === 'restaurant' ? 'Open Dashboard' : 'My Profile'}
+                            </button>
+                            <button
+                                onClick={handleLogout}
+                                className="w-full flex justify-center items-center gap-2 bg-white border border-slate-200 text-red-500 py-3.5 rounded-xl font-bold text-sm hover:bg-red-50 transition-colors"
+                            >
+                                <LogOut size={18} />
+                                Logout
+                            </button>
+                        </>
                     ) : (
-                        <button
-                            onClick={() => { navigate("/login"); setIsMenuOpen(false); }}
-                            className="w-full flex justify-center items-center gap-3 bg-[#03081F] text-white py-4 rounded-full font-bold text-lg"
-                        >
-                            <User className="w-5 h-5" />
-                            Login/Signup
-                        </button>
+                        <div className="text-center">
+                            <h4 className="text-sm font-bold text-slate-800 mb-1">Welcome to Crave!</h4>
+                            <p className="text-xs text-slate-500 mb-4">Sign in to track orders and save favorites.</p>
+                            <button
+                                onClick={() => { navigate("/login"); setIsMenuOpen(false); }}
+                                className="w-full flex justify-center items-center gap-2 bg-slate-900 text-white py-4 rounded-xl font-bold text-base hover:bg-slate-800 transition-colors shadow-lg"
+                            >
+                                <User size={18} />
+                                Login / Signup
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>

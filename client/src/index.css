@@ -1,7 +1,24 @@
 @import "tailwindcss";
 
-html, body {
+html,
+body {
   height: 100%;
   margin: 0;
   padding: 0;
+}
+
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- LEAFLET SMOOTH MARKER --- */
+.leaflet-marker-icon {
+  transition: transform 0.5s linear !important;
 }
