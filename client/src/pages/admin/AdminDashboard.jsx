@@ -597,7 +597,7 @@ const AdminDashboard = () => {
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden w-full">
                     <div className="flex border-b border-gray-100">
                       <button onClick={() => setRequestSubTab('restaurant')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${requestSubTab === 'restaurant' ? 'text-orange-600 border-b-2 border-orange-600 bg-orange-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>
-                        <Store size={16} className="hidden sm:block" /> Rest. <span className="hidden sm:inline">({restaurantRequests.length})</span>
+                        <Store size={16} className="hidden sm:block" /> Restaurant <span className="hidden sm:inline">({restaurantRequests.length})</span>
                       </button>
                       <button onClick={() => setRequestSubTab('rider')} className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${requestSubTab === 'rider' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>
                         <Bike size={16} className="hidden sm:block" /> Rider <span className="hidden sm:inline">({riderRequests.length})</span>
