@@ -116,7 +116,7 @@ const Chatbot = () => {
   if (isHidden) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[99] font-sans">
+    <div className={`fixed z-[99] font-sans ${isOpen ? 'inset-0 sm:inset-auto sm:bottom-6 sm:right-6' : 'bottom-6 right-6'}`}>
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
@@ -127,7 +127,7 @@ const Chatbot = () => {
       )}
 
       {isOpen && (
-        <div className="w-[360px] h-[520px] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="w-full h-full sm:w-[360px] sm:h-[520px] bg-white sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden sm:border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="bg-[#e8601a] p-4 text-white flex justify-between items-center shadow-md">
             <div className="flex items-center gap-3">
               <div className="bg-white text-[#e8601a] rounded-lg w-8 h-8 flex items-center justify-center font-bold text-xl shadow-inner">C</div>

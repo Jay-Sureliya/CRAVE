@@ -153,7 +153,8 @@ const TrackOrder = () => {
     if (!order || !order.id || activeTab !== "live") return;
     if (wsRef.current) { wsRef.current.close(); }
 
-    const ws = new WebSocket(`ws://crave-qozy.onrender.com/api/ws/track/${order.id}`);
+    // FIXED: Changed ws:// to wss:// for secure WebSocket connection
+    const ws = new WebSocket(`wss://crave-qozy.onrender.com/api/ws/track/${order.id}`);
     wsRef.current = ws;
 
     ws.onmessage = (event) => {
