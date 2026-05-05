@@ -97,6 +97,7 @@ def _send_email_core(to_email, subject, body, image_base64=None):
             msg.attach(img)
         except Exception: pass
 
+    # FIX: Secure SSL connection on Port 465 to bypass Render's firewall
     try:
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
         
