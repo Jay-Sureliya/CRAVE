@@ -1,7 +1,5 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import os
+import resend
 
 # 1. Auto-Reply (Immediate)
 def send_auto_acknowledgment(user_email: str, user_name: str):
@@ -33,26 +31,26 @@ def send_admin_reply_email(user_email: str, user_name: str, original_msg: str, a
     """
     _send_email(user_email, subject, body)
 
-# Internal Helper
+# Internal Helper (UPDATED TO USE RESEND)
 def _send_email(to_email, subject, body):
-    sender_email = os.getenv("MAIL_USERNAME")
-    sender_password = os.getenv("MAIL_PASSWORD")
+    # Fetch the Resend API key from your Render environment variables
+    resend.api_key = os.getenv("RESEND_API_KEY")
     
-    if not sender_email:
-        print(f"⚠️ Mock Email to {to_email}: {subject}")
+    if not resend.api_key:
+        print(f"⚠️ Mock Email to {to_email} (Missing RESEND_API_KEY): {subject}")
         return
 
-    msg = MIMEMultipart()
-    msg["From"] = sender_email
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "html"))
+    # Build the email payload
+    params = {
+        "from": "Crave Support <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": subject,
+        "html": body,
+    }
 
     try:
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, to_email, msg.as_string())
-        server.quit()
+        # Send the email via HTTP API
+        email = resend.Emails.send(params)
+        print(f"✅ Email sent successfully via Resend to {to_email}")
     except Exception as e:
         print(f"❌ Email Failed: {e}")
