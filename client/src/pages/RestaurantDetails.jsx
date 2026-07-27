@@ -14,7 +14,7 @@ const getImageUrl = (item) => {
     return item.image;
   }
   // Automatically fetch from backend API if no direct image string is provided
-  return `http://localhost:8000/api/menu/image/${item.id}?t=${new Date().getTime()}`;
+  return `https://crave-qozy.onrender.com/api/menu/image/${item.id}?t=${new Date().getTime()}`;
 };
 
 // --- TOAST COMPONENT ---

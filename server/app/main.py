@@ -86,7 +86,7 @@ app = FastAPI(title="Crave API")
 # --- CORS CONFIGURATION ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173","http://127.0.0.1:5173", "http://localhost:8000"], 
+    allow_origins=["http://localhost:5173","http://127.0.0.1:5173", "http://localhost:8000" , "https://crave-1-xeuc.onrender.com"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -150,6 +150,8 @@ def get_current_restaurant(user: dict = Depends(get_current_user), db: Session =
     res = db.query(Restaurant).filter(Restaurant.id == user.get("restaurant_id")).first()
     if not res: raise HTTPException(404, "Restaurant not found")
     return res
+
+
 
 # ==============================================================================
 #  ORDER MANAGEMENT SYSTEM (USER -> RESTAURANT -> RIDER)
@@ -1593,25 +1595,46 @@ def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
                 return {"reply": "Please log in so I can check your active orders!"}
 
         # --- STEP B: SAFE AI CHAT (With Link Generation) ---
+        # --- STEP B: SAFE AI CHAT (With Link Generation & Website Knowledge) ---
         safe_context = get_safe_database_context(db)
 
-        # Instructions telling the AI to use Markdown links for your React routes
+        # 1. Give the AI a "cheat sheet" about your website so it knows how to answer
+        website_knowledge = """
+        - Website Name: CRAVE
+        - Purpose: A premium food delivery platform connecting hungry customers with local restaurants.
+        - Features: Real-time rider tracking, secure online payments via Razorpay, and instant order updates.
+        - How to Order: Browse restaurants, add items to your cart, and proceed to checkout.
+        - Customer Support: If a user has an issue, needs a refund, or wants to report a problem, tell them to use the 'Messages' or 'Contact' page to reach Admin support.
+        - Rider Info: We hire local riders. Users can apply to be a rider on our platform.
+        """
+
+        # 2. Combine the knowledge, the database, AND the user's actual question!
         live_prompt = f"""
-            You are the CRAVE assistant. 
+        You are the official, friendly AI assistant for the CRAVE food delivery platform.
 
-            DATABASE STATE:
-            {safe_context}
+        WEBSITE KNOWLEDGE:
+        {website_knowledge}
 
-            INSTRUCTIONS:
-            1. Be friendly and concise.
-            2. If a user asks for food, list the items and their prices.
-            3. For EVERY food item you mention, you MUST append this exact button trigger: [Add ItemName ID:ItemID]
-            4. DO NOT use standard markdown links or parentheses. 
-            5. Example: "Devi offers Dosa for ₹97. [Add Dosa ID:1] and Pizza for ₹243. [Add Pizza ID:3]"
-            """
+        LIVE DATABASE STATE:
+        {safe_context}
+
+        USER'S QUESTION:
+        "{request.message}"
+
+        INSTRUCTIONS:
+        1. Answer the USER'S QUESTION directly, accurately, and politely.
+        2. If they ask general questions about the platform, use the WEBSITE KNOWLEDGE to help them.
+        3. If they ask about food or restaurants, use the LIVE DATABASE STATE.
+        4. For EVERY food item you mention, you MUST append this exact button trigger: [Add ItemName ID:ItemID]
+        5. DO NOT use standard markdown links or parentheses for items. 
+        6. Example: "Devi offers Dosa for ₹97. [Add Dosa ID:1] and Pizza for ₹243. [Add Pizza ID:3]"
+        """
         
-        # Send context + instructions to Gemini
-        response = chat_session.send_message(live_prompt)
+        # 3. Send the complete prompt to Gemini
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=live_prompt,
+        )
         
         return {"reply": response.text}
         

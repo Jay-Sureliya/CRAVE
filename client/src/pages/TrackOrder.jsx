@@ -95,7 +95,7 @@ const TrackOrder = () => {
       if (!token) { navigate("/login"); return; }
 
       try {
-        const res = await fetch("http://localhost:8000/api/orders/track", {
+        const res = await fetch("https://crave-qozy.onrender.com/api/orders/track", {
           headers: { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" },
         });
 
@@ -153,7 +153,7 @@ const TrackOrder = () => {
     if (!order || !order.id || activeTab !== "live") return;
     if (wsRef.current) { wsRef.current.close(); }
 
-    const ws = new WebSocket(`ws://localhost:8000/api/ws/track/${order.id}`);
+    const ws = new WebSocket(`ws://crave-qozy.onrender.com/api/ws/track/${order.id}`);
     wsRef.current = ws;
 
     ws.onmessage = (event) => {
@@ -172,7 +172,7 @@ const TrackOrder = () => {
         setLoadingHistory(true);
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         try {
-          const res = await fetch("http://localhost:8000/api/orders/history", { headers: { Authorization: `Bearer ${token}` } });
+          const res = await fetch("https://crave-qozy.onrender.com/api/orders/history", { headers: { Authorization: `Bearer ${token}` } });
           if (res.ok) { setOrderHistory(await res.json()); }
         } catch (err) { } finally { setLoadingHistory(false); }
       };
@@ -184,7 +184,7 @@ const TrackOrder = () => {
     if (!message.trim()) return;
     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     try {
-      const res = await fetch(`http://localhost:8000/api/orders/${order.id}/message-rider`, {
+      const res = await fetch(`https://crave-qozy.onrender.com/api/orders/${order.id}/message-rider`, {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
@@ -195,7 +195,7 @@ const TrackOrder = () => {
   const handleRatingSubmit = async () => {
     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     try {
-      await fetch(`http://localhost:8000/api/orders/${lastActiveOrder.current.id}/rate-rider`, {
+      await fetch(`https://crave-qozy.onrender.com/api/orders/${lastActiveOrder.current.id}/rate-rider`, {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ rating }),
       });
@@ -219,7 +219,7 @@ const TrackOrder = () => {
             continue;
         }
 
-        await fetch("http://localhost:8000/api/cart", {
+        await fetch("https://crave-qozy.onrender.com/api/cart", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,
