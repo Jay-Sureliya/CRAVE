@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     User, LogOut, LayoutDashboard, UtensilsCrossed, ShoppingBag,
     ShieldCheck, X, Save, Edit2, Camera, Home, Bell, Search,
-    DollarSign, Star, Activity, ChevronRight, CheckCircle
+    DollarSign, Star, Activity, ChevronRight, CheckCircle, Menu
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -12,6 +12,23 @@ import api from "../../services/api";
 import RestaurantOrders from "../restaurant/RestaurantOrders";
 import RestaurantMenu from "../restaurant/RestaurantMenu";
 import { useToast } from "../../context/useToast";
+
+// --- TOAST COMPONENT ---
+const Toast = ({ message, type, onClose }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 3000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    const bgColors = { success: "bg-emerald-600", error: "bg-red-600", info: "bg-blue-600" };
+
+    return (
+        <div className={`fixed bottom-6 right-6 ${bgColors[type]} text-white px-6 py-3 rounded-lg shadow-xl flex items-center gap-3 z-[100] animate-bounce-in`}>
+            {type === 'success' ? <CheckCircle size={20} /> : <XCircle size={20} />}
+            <span className="font-medium">{message}</span>
+        </div>
+    );
+};
 
 const RestaurantDashboard = () => {
     const navigate = useNavigate();
@@ -22,6 +39,9 @@ const RestaurantDashboard = () => {
     const [globalSearch, setGlobalSearch] = useState("");
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState("");
+
+    // Mobile Sidebar State
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const [showNotifications, setShowNotifications] = useState(false);
     const [pendingOrders, setPendingOrders] = useState([]);
@@ -198,6 +218,12 @@ const RestaurantDashboard = () => {
         }
     }
 
+    // Helper to change tabs and close sidebar on mobile
+    const handleNavClick = (tab) => {
+        setActiveTab(tab);
+        setIsSidebarOpen(false);
+    };
+
     return (
         <>
             {/* --- CSS TO HIDE SCROLLBAR BUT ALLOW SCROLLING --- */}
@@ -208,23 +234,32 @@ const RestaurantDashboard = () => {
                 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
             `}</style>
 
-            <div className="flex h-screen w-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-hidden">
+            <div className="flex h-screen w-screen bg-[#F8F9FA] text-slate-800 font-sans overflow-hidden relative">
                 <AnimatePresence>
                     {toastMessage && (
                         <motion.div
                             initial={{ opacity: 0, y: 50 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 20 }}
-                            className={`fixed bottom-8 right-8 z-[200] text-white px-6 py-4 rounded-xl shadow-2xl font-medium flex items-center gap-3 ${toastMessage.includes("🔔") ? "bg-orange-600" : "bg-emerald-600"}`}
+                            className={`fixed bottom-8 right-4 sm:right-8 z-[200] text-white px-6 py-4 rounded-xl shadow-2xl font-medium flex items-center gap-3 ${toastMessage.includes("🔔") ? "bg-orange-600" : "bg-emerald-600"}`}
                         >
-                            {toastMessage.includes("🔔") ? <Bell size={20} className="text-white animate-wiggle" /> : <ShieldCheck size={20} className="text-white" />}
+                            {toastMessage.includes("🔔") ? <Bell size={20} className="text-white animate-wiggle shrink-0" /> : <ShieldCheck size={20} className="text-white shrink-0" />}
                             {toastMessage}
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                <aside className="w-72 bg-white border-r border-gray-200 flex flex-col h-full z-30 shadow-sm transition-all">
-                    <div className="h-24 flex-none flex items-center px-8 border-b border-gray-50">
+                {/* MOBILE OVERLAY */}
+                {isSidebarOpen && (
+                    <div
+                        className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm transition-opacity"
+                        onClick={() => setIsSidebarOpen(false)}
+                    />
+                )}
+
+                {/* SIDEBAR */}
+                <aside className={`fixed inset-y-0 left-0 w-72 bg-white border-r border-gray-200 flex flex-col h-full z-50 shadow-2xl lg:shadow-sm lg:relative transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+                    <div className="h-24 flex-none flex items-center px-8 border-b border-gray-50 justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">C</div>
                             <div>
@@ -232,20 +267,24 @@ const RestaurantDashboard = () => {
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Partner</span>
                             </div>
                         </div>
+                        {/* Close button for mobile inside sidebar */}
+                        <button className="lg:hidden text-gray-400 hover:text-black" onClick={() => setIsSidebarOpen(false)}>
+                            <X size={24} />
+                        </button>
                     </div>
 
                     <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto no-scrollbar">
                         <div className="px-4 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Operations</div>
-                        <NavItem icon={LayoutDashboard} label="Overview" isActive={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
-                        <NavItem icon={ShoppingBag} label="Live Orders" count={pendingOrders.length > 0 ? pendingOrders.length : null} isActive={activeTab === "orders"} onClick={() => setActiveTab("orders")} />
-                        <NavItem icon={UtensilsCrossed} label="Menu Catalog" isActive={activeTab === "menu"} onClick={() => setActiveTab("menu")} />
+                        <NavItem icon={LayoutDashboard} label="Overview" isActive={activeTab === "overview"} onClick={() => handleNavClick("overview")} />
+                        <NavItem icon={ShoppingBag} label="Live Orders" count={pendingOrders.length > 0 ? pendingOrders.length : null} isActive={activeTab === "orders"} onClick={() => handleNavClick("orders")} />
+                        <NavItem icon={UtensilsCrossed} label="Menu Catalog" isActive={activeTab === "menu"} onClick={() => handleNavClick("menu")} />
 
                         <div className="px-4 mt-8 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Account</div>
-                        <NavItem icon={User} label="Profile & Settings" isActive={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
+                        <NavItem icon={User} label="Profile & Settings" isActive={activeTab === "profile"} onClick={() => handleNavClick("profile")} />
                     </nav>
 
                     <div className="flex-none p-4 bg-gray-50 border-t border-gray-100 space-y-2">
-                        <button onClick={() => navigate("/")} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-black hover:text-black transition-all">
+                        <button onClick={() => navigate("/")} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-black hover:text-black transition-all shadow-sm">
                             <Home size={18} /> Back to Website
                         </button>
                         <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors">
@@ -254,209 +293,223 @@ const RestaurantDashboard = () => {
                     </div>
                 </aside>
 
-                <main className="flex-1 h-full overflow-y-auto no-scrollbar bg-[#F8F9FA] p-8 md:p-12 relative flex flex-col">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
-                        <div>
-                            <h2 className="text-3xl font-bold text-gray-900">
-                                {activeTab === 'overview' && 'Dashboard Overview'}
-                                {activeTab === 'orders' && 'Order Management'}
-                                {activeTab === 'menu' && 'Menu Catalog'}
-                                {activeTab === 'profile' && 'Restaurant Profile'}
-                            </h2>
-                            <p className="text-gray-500 mt-1">
-                                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                            </p>
+                {/* MAIN CONTENT WRAPPER */}
+                <div className="flex-1 flex flex-col h-full overflow-hidden relative z-0">
+
+                    {/* MOBILE TOP HEADER */}
+                    <div className="lg:hidden flex items-center justify-between bg-white border-b border-gray-200 p-4 z-30 shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg">C</div>
+                            <h1 className="text-lg font-bold tracking-tight text-slate-900 leading-none">Crave.</h1>
                         </div>
-
-                        <div className="flex items-center gap-4 w-full md:w-auto relative">
-                            {(activeTab === 'orders' || activeTab === 'menu') && (
-                                <div className="relative group flex-1 md:w-80">
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors" size={18} />
-                                    <input
-                                        type="text"
-                                        value={globalSearch}
-                                        onChange={(e) => setGlobalSearch(e.target.value)}
-                                        placeholder={activeTab === 'menu' ? "Search dishes..." : "Search Order ID..."}
-                                        className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-full text-sm focus:ring-2 focus:ring-black/5 focus:border-black outline-none shadow-sm transition-all"
-                                    />
-                                </div>
-                            )}
-
-                            <div className="relative">
-                                <div
-                                    onClick={() => setShowNotifications(!showNotifications)}
-                                    className={`p-3 bg-white rounded-full border ${pendingOrders.length > 0 ? 'border-orange-200 text-orange-500 shadow-md' : 'border-gray-200 text-gray-400 hover:text-black'} cursor-pointer transition-all shadow-sm relative`}
-                                >
-                                    <Bell size={20} />
-                                    {pendingOrders.length > 0 && (
-                                        <span className="absolute top-2.5 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
-                                    )}
-                                </div>
-
-                                <AnimatePresence>
-                                    {showNotifications && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                            className="absolute right-0 mt-4 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden"
-                                        >
-                                            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                                                <span className="font-bold text-sm text-gray-900">New Orders</span>
-                                                <span className="text-[10px] bg-orange-100 text-orange-600 px-2.5 py-1 rounded-full font-black uppercase tracking-wider">
-                                                    {pendingOrders.length} Pending
-                                                </span>
-                                            </div>
-                                            <div className="max-h-72 overflow-y-auto no-scrollbar">
-                                                {pendingOrders.length === 0 ? (
-                                                    <div className="p-8 text-center flex flex-col items-center justify-center text-gray-400">
-                                                        <CheckCircle size={32} className="mb-2 text-gray-200" />
-                                                        <p className="text-sm font-bold">All caught up!</p>
-                                                        <p className="text-xs mt-1">No new orders waiting.</p>
-                                                    </div>
-                                                ) : (
-                                                    pendingOrders.map(order => (
-                                                        <div
-                                                            key={order.id}
-                                                            onClick={() => { setActiveTab('orders'); setShowNotifications(false); }}
-                                                            className="p-5 hover:bg-orange-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors group"
-                                                        >
-                                                            <div className="flex justify-between items-start mb-1.5">
-                                                                <p className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">Order #{order.id}</p>
-                                                                <p className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">₹{order.total_amount}</p>
-                                                            </div>
-                                                            <p className="text-xs text-gray-500 font-medium truncate">
-                                                                {order.items ? order.items.map(i => i.name).join(', ') : "View order details"}
-                                                            </p>
-                                                            <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-wider flex items-center gap-1">
-                                                                Click to process <ChevronRight size={12} />
-                                                            </p>
-                                                        </div>
-                                                    ))
-                                                )}
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        </div>
+                        <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                            <Menu size={24} />
+                        </button>
                     </div>
 
-                    <AnimatePresence mode="wait">
-                        {activeTab === "overview" && (
-                            <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                    <main className="flex-1 h-full overflow-y-auto no-scrollbar bg-[#F8F9FA] p-4 sm:p-6 md:p-8 lg:p-12 relative flex flex-col">
+                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 md:mb-10 gap-4 md:gap-6">
+                            <div>
+                                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                                    {activeTab === 'overview' && 'Dashboard Overview'}
+                                    {activeTab === 'orders' && 'Order Management'}
+                                    {activeTab === 'menu' && 'Menu Catalog'}
+                                    {activeTab === 'profile' && 'Restaurant Profile'}
+                                </h2>
+                                <p className="text-sm sm:text-base text-gray-500 mt-1">
+                                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                </p>
+                            </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <StatCard label="30-Day Revenue" value={`₹${stats.revenue.toLocaleString()}`} icon={DollarSign} color="bg-slate-900" />
-                                    <StatCard label="30-Day Orders" value={stats.orders} icon={ShoppingBag} color="bg-orange-600" />
-                                    {/* FIX: Shows 0.0 ★ if rating is missing */}
-                                    <StatCard label="Customer Rating" value={`${stats.rating} ★`} icon={Star} color="bg-amber-500" />
-                                </div>
-
-                                <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col h-[420px]">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="text-lg font-bold text-gray-900">Performance Trend (Last 30 Days)</h3>
-                                        <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
-                                            <Activity size={20} />
-                                        </div>
+                            <div className="flex items-center gap-3 w-full lg:w-auto relative justify-between sm:justify-start">
+                                {(activeTab === 'orders' || activeTab === 'menu') && (
+                                    <div className="relative group flex-1 sm:w-64 md:w-80">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors" size={18} />
+                                        <input
+                                            type="text"
+                                            value={globalSearch}
+                                            onChange={(e) => setGlobalSearch(e.target.value)}
+                                            placeholder={activeTab === 'menu' ? "Search dishes..." : "Search Order ID..."}
+                                            className="w-full pl-11 pr-4 py-2.5 sm:py-3 bg-white border border-gray-200 rounded-full text-sm focus:ring-2 focus:ring-black/5 focus:border-black outline-none shadow-sm transition-all"
+                                        />
                                     </div>
+                                )}
 
-                                    <div className="flex-1 w-full h-full mt-4">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                                <defs>
-                                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#ea580c" stopOpacity={0.3} />
-                                                        <stop offset="95%" stopColor="#ea580c" stopOpacity={0} />
-                                                    </linearGradient>
-                                                    <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                                    </linearGradient>
-                                                </defs>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} dy={10} minTickGap={25} />
-                                                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(value) => `₹${value}`} />
-                                                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                                                <Tooltip
-                                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                                    formatter={(value, name) => {
-                                                        if (name === "Revenue") return [`₹${Number(value).toFixed(0)}`, "Revenue"];
-                                                        return [value, "Orders"];
-                                                    }}
-                                                />
-                                                <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
-                                                <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#ea580c" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                                                <Area yAxisId="right" type="monotone" dataKey="orders" name="Orders" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorOrders)" />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {activeTab === "orders" && (
-                            <motion.div key="orders" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                                <RestaurantOrders searchQuery={globalSearch} />
-                            </motion.div>
-                        )}
-
-                        {activeTab === "menu" && (
-                            <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                                <RestaurantMenu searchQuery={globalSearch} />
-                            </motion.div>
-                        )}
-
-                        {activeTab === "profile" && (
-                            <motion.div key="profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl">
-                                <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm flex flex-col md:flex-row gap-8 items-start relative overflow-hidden">
-                                    <div className="w-32 h-32 rounded-2xl bg-gray-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg shrink-0 relative z-10">
-                                        {userData.profile_image ? (
-                                            <img src={userData.profile_image} alt="Profile" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <span className="text-4xl font-bold text-gray-300">{(userData.name || "R").charAt(0)}</span>
+                                <div className="relative shrink-0">
+                                    <div
+                                        onClick={() => setShowNotifications(!showNotifications)}
+                                        className={`p-2.5 sm:p-3 bg-white rounded-full border ${pendingOrders.length > 0 ? 'border-orange-200 text-orange-500 shadow-md' : 'border-gray-200 text-gray-400 hover:text-black'} cursor-pointer transition-all shadow-sm relative`}
+                                    >
+                                        <Bell size={20} />
+                                        {pendingOrders.length > 0 && (
+                                            <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
                                         )}
                                     </div>
-                                    <div className="flex-1 relative z-10 w-full">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{userData.name}</h3>
-                                                <p className="text-gray-500 font-medium">@{userData.username}</p>
+
+                                    <AnimatePresence>
+                                        {showNotifications && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                className="absolute right-0 sm:right-0 mt-4 w-[calc(100vw-2rem)] sm:w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden"
+                                            >
+                                                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                                                    <span className="font-bold text-sm text-gray-900">New Orders</span>
+                                                    <span className="text-[10px] bg-orange-100 text-orange-600 px-2.5 py-1 rounded-full font-black uppercase tracking-wider">
+                                                        {pendingOrders.length} Pending
+                                                    </span>
+                                                </div>
+                                                <div className="max-h-72 overflow-y-auto no-scrollbar">
+                                                    {pendingOrders.length === 0 ? (
+                                                        <div className="p-8 text-center flex flex-col items-center justify-center text-gray-400">
+                                                            <CheckCircle size={32} className="mb-2 text-gray-200" />
+                                                            <p className="text-sm font-bold">All caught up!</p>
+                                                            <p className="text-xs mt-1">No new orders waiting.</p>
+                                                        </div>
+                                                    ) : (
+                                                        pendingOrders.map(order => (
+                                                            <div
+                                                                key={order.id}
+                                                                onClick={() => { setActiveTab('orders'); setShowNotifications(false); }}
+                                                                className="p-4 sm:p-5 hover:bg-orange-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors group"
+                                                            >
+                                                                <div className="flex justify-between items-start mb-1.5">
+                                                                    <p className="text-sm font-black text-gray-900 group-hover:text-orange-600 transition-colors">Order #{order.id}</p>
+                                                                    <p className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">₹{order.total_amount}</p>
+                                                                </div>
+                                                                <p className="text-xs text-gray-500 font-medium truncate">
+                                                                    {order.items ? order.items.map(i => i.name).join(', ') : "View order details"}
+                                                                </p>
+                                                                <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-wider flex items-center gap-1">
+                                                                    Click to process <ChevronRight size={12} />
+                                                                </p>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            </div>
+                        </div>
+
+                        <AnimatePresence mode="wait">
+                            {activeTab === "overview" && (
+                                <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 md:space-y-8">
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
+                                        <StatCard label="30-Day Revenue" value={`₹${stats.revenue.toLocaleString()}`} icon={DollarSign} color="bg-slate-900" />
+                                        <StatCard label="30-Day Orders" value={stats.orders} icon={ShoppingBag} color="bg-orange-600" />
+                                        <StatCard label="Customer Rating" value={`${stats.rating} ★`} icon={Star} color="bg-amber-500" />
+                                    </div>
+
+                                    <div className="bg-white rounded-2xl border border-gray-200 p-4 md:p-8 shadow-sm flex flex-col h-[300px] md:h-[420px]">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h3 className="text-base md:text-lg font-bold text-gray-900">Performance Trend (Last 30 Days)</h3>
+                                            <div className="p-1.5 md:p-2 bg-orange-50 text-orange-600 rounded-lg">
+                                                <Activity size={20} />
                                             </div>
-                                            <button onClick={openEditModal} className="px-5 py-2.5 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg shrink-0">
-                                                <Edit2 size={16} /> Edit Profile
-                                            </button>
                                         </div>
 
-                                        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <DetailBox label="Email Address" value={userData.email} />
-                                            <DetailBox label="Account Status" value={userData.is_active ? "Active" : "Inactive"} isStatus />
-                                            <DetailBox 
-                                                label="Overall Rating" 
-                                                value={`${userData.average_rating > 0 ? Number(userData.average_rating).toFixed(1) : '0.0'} / 5.0 (${userData.rating_count || 0} Reviews)`} 
-                                            />
-                                            <DetailBox label="Business Address" value={userData.address || "Not Provided"} />
+                                        <div className="flex-1 w-full h-full mt-4">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                                                    <defs>
+                                                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#ea580c" stopOpacity={0.3} />
+                                                            <stop offset="95%" stopColor="#ea580c" stopOpacity={0} />
+                                                        </linearGradient>
+                                                        <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} dy={10} minTickGap={25} />
+                                                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(value) => `₹${value}`} width={50} />
+                                                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} width={30} />
+                                                    <Tooltip
+                                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                        formatter={(value, name) => {
+                                                            if (name === "Revenue") return [`₹${Number(value).toFixed(0)}`, "Revenue"];
+                                                            return [value, "Orders"];
+                                                        }}
+                                                    />
+                                                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                                                    <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#ea580c" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                                                    <Area yAxisId="right" type="monotone" dataKey="orders" name="Orders" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorOrders)" />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
                                         </div>
                                     </div>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </main>
+                                </motion.div>
+                            )}
+
+                            {activeTab === "orders" && (
+                                <motion.div key="orders" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                    <RestaurantOrders searchQuery={globalSearch} />
+                                </motion.div>
+                            )}
+
+                            {activeTab === "menu" && (
+                                <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                    <RestaurantMenu searchQuery={globalSearch} />
+                                </motion.div>
+                            )}
+
+                            {activeTab === "profile" && (
+                                <motion.div key="profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto lg:mx-0">
+                                    <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 shadow-sm flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-start relative overflow-hidden text-center md:text-left">
+                                        <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl bg-gray-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg shrink-0 relative z-10">
+                                            {userData.profile_image ? (
+                                                <img src={userData.profile_image} alt="Profile" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-3xl md:text-4xl font-bold text-gray-300">{(userData.name || "R").charAt(0)}</span>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 relative z-10 w-full">
+                                            <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-4">
+                                                <div>
+                                                    <h3 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">{userData.name}</h3>
+                                                    <p className="text-gray-500 font-medium">@{userData.username}</p>
+                                                </div>
+                                                <button onClick={openEditModal} className="w-full md:w-auto justify-center px-5 py-2.5 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg shrink-0">
+                                                    <Edit2 size={16} /> Edit Profile
+                                                </button>
+                                            </div>
+
+                                            <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 text-left">
+                                                <DetailBox label="Email Address" value={userData.email} />
+                                                <DetailBox label="Account Status" value={userData.is_active ? "Active" : "Inactive"} isStatus />
+                                                <DetailBox
+                                                    label="Overall Rating"
+                                                    value={`${userData.average_rating > 0 ? Number(userData.average_rating).toFixed(1) : '0.0'} / 5.0 (${userData.rating_count || 0} Reviews)`}
+                                                />
+                                                <DetailBox label="Business Address" value={userData.address || "Not Provided"} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </main>
+                </div>
 
                 <AnimatePresence>
                     {isEditModalOpen && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
-                                <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white">
-                                    <h3 className="font-bold text-xl text-gray-900">Edit Profile</h3>
+                            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                                <div className="px-6 md:px-8 py-5 md:py-6 border-b border-gray-100 flex justify-between items-center bg-white flex-shrink-0">
+                                    <h3 className="font-bold text-lg md:text-xl text-gray-900">Edit Profile</h3>
                                     <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20} className="text-gray-400" /></button>
                                 </div>
 
-                                <div className="p-8 max-h-[65vh] overflow-y-auto no-scrollbar space-y-6">
+                                <div className="p-6 md:p-8 overflow-y-auto no-scrollbar space-y-6">
                                     <div className="flex justify-center">
                                         <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
-                                            <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-gray-100 bg-gray-50 shadow-inner">
+                                            <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-4 border-gray-100 bg-gray-50 shadow-inner">
                                                 {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><Camera size={32} /></div>}
                                             </div>
                                             <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white font-bold text-xs uppercase tracking-widest">Change</div>
@@ -464,24 +517,24 @@ const RestaurantDashboard = () => {
                                         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-5">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
                                         <InputGroup label="Restaurant Name" name="name" value={formData.name} onChange={handleInputChange} />
                                         <InputGroup label="Username" name="username" value={formData.username} onChange={handleInputChange} />
                                     </div>
                                     <InputGroup label="Email" name="email" value={formData.email} onChange={handleInputChange} />
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Address</label>
-                                        <textarea name="address" value={formData.address} onChange={handleInputChange} rows="2" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none text-sm font-bold resize-none transition-all focus:bg-white" />
+                                        <textarea name="address" value={formData.address} onChange={handleInputChange} rows="2" className="w-full p-3 md:p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none text-sm font-bold resize-none transition-all focus:bg-white" />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-5 pt-4 border-t border-gray-100">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5 pt-4 border-t border-gray-100">
                                         <InputGroup label="New Password" name="password" value={formData.password} onChange={handleInputChange} type="password" placeholder="Optional" />
                                         <InputGroup label="Confirm" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} type="password" placeholder="Optional" />
                                     </div>
                                 </div>
 
-                                <div className="p-6 border-t border-gray-100 flex gap-3 bg-gray-50">
-                                    <button onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3.5 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-100 transition-colors">Cancel</button>
-                                    <button onClick={handleSaveProfile} className="flex-1 py-3.5 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-lg"><Save size={18} /> Save Changes</button>
+                                <div className="p-4 md:p-6 border-t border-gray-100 flex gap-3 bg-gray-50 flex-shrink-0">
+                                    <button onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 md:py-3.5 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-100 transition-colors text-sm md:text-base">Cancel</button>
+                                    <button onClick={handleSaveProfile} className="flex-1 py-3 md:py-3.5 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-lg text-sm md:text-base"><Save size={18} /> Save</button>
                                 </div>
                             </motion.div>
                         </div>
@@ -503,31 +556,31 @@ const NavItem = ({ icon: Icon, label, isActive, onClick, count }) => (
 );
 
 const DetailBox = ({ label, value, isStatus, className }) => (
-    <div className={`p-5 bg-gray-50 rounded-2xl border border-gray-100 ${className}`}>
+    <div className={`p-4 md:p-5 bg-gray-50 rounded-2xl border border-gray-100 ${className}`}>
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{label}</p>
         {isStatus ? (
-            <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wide ${value === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{value}</span>
+            <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wide inline-block ${value === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{value}</span>
         ) : (
-            <p className="font-bold text-gray-900 text-sm leading-relaxed">{value}</p>
+            <p className="font-bold text-gray-900 text-sm leading-relaxed break-words">{value}</p>
         )}
     </div>
 );
 
 const InputGroup = ({ label, ...props }) => (
-    <div className="space-y-2">
+    <div className="space-y-2 w-full">
         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{label}</label>
-        <input {...props} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none text-sm font-bold transition-all focus:bg-white" />
+        <input {...props} className="w-full p-3 md:p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none text-sm font-bold transition-all focus:bg-white" />
     </div>
 );
 
 const StatCard = ({ label, value, icon: Icon, color }) => (
-    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-5 hover:shadow-md transition-shadow">
-        <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-white shadow-lg ${color}`}>
-            <Icon size={24} />
+    <div className="bg-white p-5 md:p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 md:gap-5 hover:shadow-md transition-shadow">
+        <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center text-white shadow-lg shrink-0 ${color}`}>
+            <Icon size={20} className="md:w-6 md:h-6" />
         </div>
-        <div>
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
-            <p className="text-2xl font-black text-gray-900 mt-0.5">{value}</p>
+        <div className="overflow-hidden">
+            <p className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-widest truncate">{label}</p>
+            <p className="text-xl md:text-2xl font-black text-gray-900 mt-0.5 truncate">{value}</p>
         </div>
     </div>
 );

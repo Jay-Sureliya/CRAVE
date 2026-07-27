@@ -15,7 +15,7 @@ const FoodItemDetails = () => {
     const [item, setItem] = useState(location.state?.item || null);
     const [loading, setLoading] = useState(!location.state?.item);
     const [selectedAddons, setSelectedAddons] = useState(new Set());
-    
+
     // Cart States
     const [cartItems, setCartItems] = useState([]);
     const [qty, setQty] = useState(1); // Local qty for before it's added
@@ -104,10 +104,10 @@ const FoodItemDetails = () => {
     const handleUpdateCart = async (delta) => {
         const token = getToken();
         if (!token) { addToast("Please sign in first", "error"); return; }
-        
+
         setIsAdding(true);
         const previousCart = [...cartItems];
-        
+
         // 1. Optimistic UI Update (Instant Visual Feedback)
         setCartItems(prev => {
             const existing = prev.find(i => i.menu_item_id === item.id || i.id === item.id);
@@ -123,7 +123,7 @@ const FoodItemDetails = () => {
                     setIsAdded(true);
                     setTimeout(() => setIsAdded(false), 1500);
                     addToast("Item added to cart!", "success");
-                    return [...prev, { ...item, menu_item_id: item.id, quantity: delta }]; 
+                    return [...prev, { ...item, menu_item_id: item.id, quantity: delta }];
                 }
                 return prev;
             }
@@ -140,13 +140,13 @@ const FoodItemDetails = () => {
             };
 
             if (delta > 0) {
-                payload.total_price = unitPrice * delta; 
+                payload.total_price = unitPrice * delta;
             }
 
             await api.post("/api/cart", payload, { headers: { Authorization: `Bearer ${token}` } });
 
             window.dispatchEvent(new Event('cart-updated'));
-            await fetchCart(); 
+            await fetchCart();
         } catch (err) {
             setCartItems(previousCart); // Rollback visually if the database fails
             if (err.response && err.response.status === 401) {
@@ -180,18 +180,18 @@ const FoodItemDetails = () => {
     return (
         <div className="min-h-screen bg-white font-sans flex justify-center selection:bg-orange-500/20">
             <div className="w-[95%] flex flex-col md:flex-row relative">
-                
+
                 {/* ================= LEFT: MASSIVE STICKY IMAGE ================= */}
                 <div className="relative w-full md:w-1/2 h-[50vh] md:h-screen md:sticky top-0 z-10 md:py-6">
                     <div className="w-full h-full rounded-[2.5rem] overflow-hidden relative shadow-sm border border-gray-100">
-                        <img 
-                            src={getImageUrl(item)} 
-                            alt={item.name} 
+                        <img
+                            src={getImageUrl(item)}
+                            alt={item.name}
                             className="w-full h-full object-cover"
                         />
-                        
-                        <button 
-                            onClick={() => navigate(-1)} 
+
+                        <button
+                            onClick={() => navigate(-1)}
                             className="absolute top-8 left-8 md:top-10 md:left-10 bg-white/90 backdrop-blur-md text-black px-5 py-3 rounded-full flex items-center gap-2 text-sm font-bold shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:scale-105 active:scale-95 transition-all"
                         >
                             <ArrowLeft size={18} strokeWidth={2.5} /> Back
@@ -210,13 +210,13 @@ const FoodItemDetails = () => {
 
                 {/* ================= RIGHT: EDITORIAL CONTENT ================= */}
                 <div className="w-full md:w-1/2 bg-white px-6 py-12 md:px-12 lg:px-20 flex flex-col justify-center min-h-screen z-20">
-                    <motion.div 
-                        variants={staggerContainer} 
-                        initial="hidden" 
+                    <motion.div
+                        variants={staggerContainer}
+                        initial="hidden"
                         animate="show"
                         className="max-w-lg w-full mx-auto md:mx-0 flex flex-col h-full justify-center py-10"
                     >
-                        
+
                         <motion.div variants={fadeUp} className="mb-6">
                             <span className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">
                                 {item.category || "Signature Dish"}
@@ -243,11 +243,6 @@ const FoodItemDetails = () => {
                         </motion.p>
 
                         <motion.div variants={fadeUp} className="grid grid-cols-3 gap-6 border-y border-gray-100 py-8 mb-10">
-                            <div className="flex flex-col items-start gap-1">
-                                <Star size={20} strokeWidth={1.5} className="text-black mb-2" />
-                                <span className="text-sm font-bold text-black">4.8 / 5.0</span>
-                                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Rating</span>
-                            </div>
                             <div className="flex flex-col items-start gap-1 border-l border-gray-100 pl-6">
                                 <Clock size={20} strokeWidth={1.5} className="text-black mb-2" />
                                 <span className="text-sm font-bold text-black">25 Mins</span>
@@ -266,20 +261,19 @@ const FoodItemDetails = () => {
                                 <h3 className="text-sm font-bold uppercase tracking-widest text-black mb-6">
                                     Add Enhancements
                                 </h3>
-                                
+
                                 <div className="flex flex-col">
                                     {availableAddons.map(addon => {
                                         const isSelected = selectedAddons.has(addon.id);
                                         return (
-                                            <div 
-                                                key={addon.id} 
+                                            <div
+                                                key={addon.id}
                                                 onClick={() => toggleAddon(addon.id)}
                                                 className="group flex items-center justify-between py-4 border-b border-gray-100 last:border-0 cursor-pointer transition-colors hover:bg-gray-50 -mx-4 px-4 rounded-xl"
                                             >
                                                 <div className="flex items-center gap-4">
-                                                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-300 ${
-                                                        isSelected ? "border-black bg-black" : "border-gray-300 bg-white group-hover:border-gray-400"
-                                                    }`}>
+                                                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-300 ${isSelected ? "border-black bg-black" : "border-gray-300 bg-white group-hover:border-gray-400"
+                                                        }`}>
                                                         {isSelected && <Check size={12} className="text-white" strokeWidth={4} />}
                                                     </div>
                                                     <span className={`text-base font-medium transition-colors ${isSelected ? "text-black font-bold" : "text-gray-600"}`}>
@@ -303,23 +297,23 @@ const FoodItemDetails = () => {
                                 <>
                                     {/* Pre-Cart Qty Selector */}
                                     <div className="flex items-center bg-gray-50 rounded-full px-2 h-14 w-36 justify-between border border-gray-200">
-                                        <button 
-                                            onClick={() => setQty(Math.max(1, qty - 1))} 
+                                        <button
+                                            onClick={() => setQty(Math.max(1, qty - 1))}
                                             className="w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:text-black hover:bg-white active:scale-95 transition-all shadow-sm"
                                         >
-                                            <Minus size={18} strokeWidth={2.5}/>
+                                            <Minus size={18} strokeWidth={2.5} />
                                         </button>
                                         <span className="font-black text-lg text-black">{qty}</span>
-                                        <button 
-                                            onClick={() => setQty(qty + 1)} 
+                                        <button
+                                            onClick={() => setQty(qty + 1)}
                                             className="w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:text-black hover:bg-white active:scale-95 transition-all shadow-sm"
                                         >
-                                            <Plus size={18} strokeWidth={2.5}/>
+                                            <Plus size={18} strokeWidth={2.5} />
                                         </button>
                                     </div>
 
                                     {/* Add Button */}
-                                    <button 
+                                    <button
                                         onClick={() => handleUpdateCart(qty)}
                                         disabled={isAdding}
                                         className="flex-1 h-14 rounded-full font-bold text-base md:text-lg shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 px-6 bg-black text-white hover:bg-gray-800 shadow-black/25"
@@ -331,20 +325,20 @@ const FoodItemDetails = () => {
                                 // Item Already in Cart State
                                 <div className="flex-1 flex items-center justify-between bg-gray-50 rounded-full p-2 border border-gray-200">
                                     <div className="flex items-center bg-white rounded-full px-2 h-12 w-32 justify-between shadow-sm border border-gray-100">
-                                        <button 
-                                            onClick={() => handleUpdateCart(-1)} 
+                                        <button
+                                            onClick={() => handleUpdateCart(-1)}
                                             disabled={isAdding}
                                             className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-black hover:bg-gray-100 active:scale-95 transition-all"
                                         >
-                                            {isAdding ? <Loader2 size={16} className="animate-spin" /> : <Minus size={18} strokeWidth={2.5}/>}
+                                            {isAdding ? <Loader2 size={16} className="animate-spin" /> : <Minus size={18} strokeWidth={2.5} />}
                                         </button>
                                         <span className="font-black text-lg text-black">{cartQty}</span>
-                                        <button 
-                                            onClick={() => handleUpdateCart(1)} 
+                                        <button
+                                            onClick={() => handleUpdateCart(1)}
                                             disabled={isAdding}
                                             className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-black hover:bg-gray-100 active:scale-95 transition-all"
                                         >
-                                            {isAdding ? <Loader2 size={16} className="animate-spin" /> : <Plus size={18} strokeWidth={2.5}/>}
+                                            {isAdding ? <Loader2 size={16} className="animate-spin" /> : <Plus size={18} strokeWidth={2.5} />}
                                         </button>
                                     </div>
                                     <div className="flex items-center gap-2 pr-6 font-bold text-emerald-600">

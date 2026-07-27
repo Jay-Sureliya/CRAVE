@@ -10,8 +10,8 @@ export default defineConfig({
     port: 5173,
     headers: {
       // This tells the browser it's okay for this app to open and monitor popups
-      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
       'Cross-Origin-Embedder-Policy': 'unsafe-none',
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups'
     }
   },
 })

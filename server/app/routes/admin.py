@@ -1,10 +1,7 @@
 ﻿import os
-import smtplib
 import base64
+import resend
 from typing import Optional, List
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.image import MIMEImage
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -71,39 +68,39 @@ class AdminRiderResponse(BaseModel):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-# --- CORE EMAIL ENGINE ---
+# --- CORE EMAIL ENGINE (USING RESEND) ---
 def _send_email_core(to_email, subject, body, image_base64=None):
-    sender_email = os.getenv("MAIL_USERNAME")
-    sender_password = os.getenv("MAIL_PASSWORD")
+    resend.api_key = os.getenv("RESEND_API_KEY")
 
-    if not sender_email or not sender_password:
-        print("⚠️ Skipped Email: Missing Credentials in .env")
+    if not resend.api_key:
+        print("⚠️ Skipped Email: Missing RESEND_API_KEY in .env")
         return
 
-    msg = MIMEMultipart("related")
-    msg["From"] = f"Crave Support <{sender_email}>"
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg_html = MIMEText(body, "html")
-    msg.attach(msg_html)
+    # Build the email payload
+    params = {
+        "from": "Crave Support <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": subject,
+        "html": body,
+    }
 
+    # Handle image attachments if you are passing them
     if image_base64 and "base64," in image_base64:
         try:
             header, encoded = image_base64.split("base64,", 1)
-            img_data = base64.b64decode(encoded)
-            img = MIMEImage(img_data)
-            img.add_header('Content-ID', '<profile_pic>')
-            img.add_header('Content-Disposition', 'inline')
-            msg.attach(img)
-        except Exception: pass
+            params["attachments"] = [
+                {
+                    "filename": "profile.png",
+                    "content": encoded
+                }
+            ]
+        except Exception as e:
+            print(f"⚠️ Failed to process image attachment: {e}")
 
+    # Send the email via HTTP API
     try:
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, to_email, msg.as_string())
-        server.quit()
-        print(f"✅ Email sent to {to_email}")
+        email = resend.Emails.send(params)
+        print(f"✅ Email sent successfully via Resend to {to_email}")
     except Exception as e:
         print(f"❌ Email Failed: {e}")
 
@@ -120,7 +117,7 @@ def send_login_email(to_email: str, username: str, password: str):
             <p><strong>Username:</strong> {username}</p>
             <p><strong>Password:</strong> {password}</p>
         </div>
-        <p><a href="http://localhost:5173/login">Login here</a></p>
+        <p><a href="https://crave-1-xeuc.onrender.com/login">Login here</a></p>
     </body>
     </html>
     """
@@ -137,7 +134,7 @@ def send_rider_welcome_email(to_email: str, username: str, password: str):
             <p><strong>Username:</strong> {username}</p>
             <p><strong>Password:</strong> {password}</p>
         </div>
-        <p><a href="http://localhost:5173/login">Login to start earning</a></p>
+        <p><a href="https://crave-1-xeuc.onrender.com/login">Login to start earning</a></p>
     </body>
     </html>
     """
